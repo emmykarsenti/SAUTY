@@ -1,4 +1,5 @@
 package fr.isen.emmykarsenti.nicolasbetoin.sauty.ble
+
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -18,6 +19,9 @@ class BleManager(private val context: Context) {
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
     private val bleScanner = bluetoothAdapter?.bluetoothLeScanner
 
+    // NOUVEAU : Mémoire pour l'auto-connexion
+    private val sharedPreferences = context.getSharedPreferences("SautyPrefs", Context.MODE_PRIVATE)
+
     // Notre tunnel de communication
     private var bluetoothGatt: BluetoothGatt? = null
 
@@ -30,6 +34,12 @@ class BleManager(private val context: Context) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 Log.d("SAUTY_BLE", "Connecté au STM32 !")
                 onStatusMessage?.invoke("Connecté au STM32 !")
+
+                // NOUVEAU : SAUVEGARDE DE L'ADRESSE MAC POUR L'AUTO-CONNEXION
+                val deviceAddress = gatt.device?.address
+                if (deviceAddress != null) {
+                    sharedPreferences.edit().putString("MAC_ADDRESS", deviceAddress).apply()
+                }
 
                 // Étape obligatoire : demander au STM32 ce qu'il sait faire (ses "Services")
                 gatt.discoverServices()
@@ -49,7 +59,7 @@ class BleManager(private val context: Context) {
         }
     }
 
-    // 2. LE RESTE DU SCANNER (Légèrement modifié)
+    // 2. LE RESTE DU SCANNER
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val deviceName = result.device.name ?: "Inconnu"
@@ -64,7 +74,10 @@ class BleManager(private val context: Context) {
     }
 
     fun startScan() {
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) return
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+            onStatusMessage?.invoke("Veuillez activer le Bluetooth")
+            return
+        }
         onStatusMessage?.invoke("Recherche du bracelet en cours...")
         bleScanner?.startScan(scanCallback)
     }
@@ -73,10 +86,41 @@ class BleManager(private val context: Context) {
         bleScanner?.stopScan(scanCallback)
     }
 
-    // 3. LA NOUVELLE FONCTION DE CONNEXION
+    // 3. LA FONCTION DE CONNEXION CLASSIQUE (Suite au scan manuel)
     private fun connectToDevice(device: BluetoothDevice) {
         onStatusMessage?.invoke("Connexion en cours...")
-        // On lance la connexion GATT
         bluetoothGatt = device.connectGatt(context, false, gattCallback)
+    }
+
+    // 4. NOUVEAU : AUTO-CONNEXION AU DÉMARRAGE
+    fun tryAutoConnect(): Boolean {
+        val savedMacAddress = sharedPreferences.getString("MAC_ADDRESS", null)
+        if (savedMacAddress != null && bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
+            try {
+                val device = bluetoothAdapter.getRemoteDevice(savedMacAddress)
+                // autoConnect = true -> le téléphone se connectera automatiquement dès que le STM32 sera allumé et à portée
+                bluetoothGatt = device.connectGatt(context, true, gattCallback)
+                onStatusMessage?.invoke("En attente du bracelet connu...")
+                return true
+            } catch (e: Exception) {
+                Log.e("SAUTY_BLE", "Erreur AutoConnect", e)
+            }
+        }
+        return false // Aucun bracelet en mémoire
+    }
+
+    // 5. NOUVEAU : DÉCONNEXION ET OUBLI DU BRACELET (Bouton manuel)
+    fun disconnectAndForget() {
+        try {
+            bluetoothGatt?.disconnect()
+            bluetoothGatt?.close()
+            bluetoothGatt = null
+        } catch (e: Exception) {
+            Log.e("SAUTY_BLE", "Erreur lors de la déconnexion", e)
+        }
+
+        // On efface la mémoire pour empêcher la reconnexion automatique
+        sharedPreferences.edit().remove("MAC_ADDRESS").apply()
+        onStatusMessage?.invoke("Bracelet oublié. Prêt à scanner.")
     }
 }

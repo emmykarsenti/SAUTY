@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "96288688606",
+    "project_id": "sauty-ekarsenti-nbetoin",
+    "storage_bucket": "sauty-ekarsenti-nbetoin.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:96288688606:android:b568f05e11f332cdf0754f",
+        "android_client_info": {
+          "package_name": "fr.isen.emmykarsenti.nicolasbetoin.sauty"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlahm3hmoUT3YilX3oLyP2-s2XdOCcTVY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

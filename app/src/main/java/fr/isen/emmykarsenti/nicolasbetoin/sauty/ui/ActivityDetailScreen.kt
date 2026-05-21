@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fr.isen.emmykarsenti.nicolasbetoin.sauty.ble.BleManager
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -28,7 +29,7 @@ import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 @Composable
-fun ActivityDetailsScreen(onBackClick: () -> Unit) {
+fun ActivityDetailsScreen(bleManager: BleManager, onBackClick: () -> Unit) {
     var selectedDate by remember { mutableStateOf(LocalDate.now()) }
     var offsetX by remember { mutableStateOf(0f) }
 
@@ -46,16 +47,19 @@ fun ActivityDetailsScreen(onBackClick: () -> Unit) {
         else -> selectedDate.format(formatter)
     }
 
-    val randomFactor = selectedDate.dayOfYear % 10
+    // CONNEXION AUX VRAIES DONNÉES BLE
+    val currentJumps by bleManager.jumpsState.collectAsState()
+    val currentCalories by bleManager.caloriesState.collectAsState()
 
-    val ring1Progress = if (isFuture) 0f else 0.6f + (randomFactor * 0.03f)
-    val ring2Progress = if (isFuture) 0f else 0.5f + (randomFactor * 0.04f)
-    val ring3Progress = if (isFuture) 0f else 0.5f + (randomFactor * 0.02f)
+    // Calcul dynamique de la progression des anneaux (Objectif : 2000 sauts et 300 kcal)
+    val ring1Progress = if (isFuture) 0f else (currentJumps.toFloat() / 2000f).coerceAtMost(1f)
+    val ring2Progress = if (isFuture) 0f else 0.5f // Temps actif simulé par défaut à 50%
+    val ring3Progress = if (isFuture) 0f else (currentCalories.toFloat() / 300f).coerceAtMost(1f)
 
-    // Valeurs simulées alignées avec le Dashboard
-    val sautsValue = if (isFuture) "0" else (1250 + randomFactor * 50).toString()
-    val tempsActifValue = if (isFuture) "0" else (15 + randomFactor * 2).toString()
-    val kcalValue = if (isFuture) "0" else (150 + randomFactor * 10).toString()
+    // Assignation des vraies valeurs dynamiques
+    val sautsValue = if (isFuture) "0" else currentJumps.toString()
+    val tempsActifValue = if (isFuture) "0" else "15" // Reste à 15 min par défaut pour le moment
+    val kcalValue = if (isFuture) "0" else currentCalories.toString()
 
     LazyColumn(
         modifier = Modifier
@@ -63,7 +67,7 @@ fun ActivityDetailsScreen(onBackClick: () -> Unit) {
             .background(Color.Black),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        // --- 1. BARRE DE NAVIGATION SUPÉRIEURE ---
+        // 1. BARRE DE NAVIGATION SUPÉRIEURE
         item {
             Row(
                 modifier = Modifier
@@ -92,7 +96,7 @@ fun ActivityDetailsScreen(onBackClick: () -> Unit) {
             }
         }
 
-        // --- 2. SEMAINE (PETITS ANNEAUX CLIQUABLES + SWIPE) ---
+        // 2. SEMAINE (PETITS ANNEAUX CLIQUABLES + SWIPE)
         item {
             Row(
                 modifier = Modifier
@@ -121,6 +125,7 @@ fun ActivityDetailsScreen(onBackClick: () -> Unit) {
                     val dayIsFuture = date.isAfter(today)
                     val initial = dayInitials[index]
 
+                    // Pour les autres jours de la semaine, on garde un léger visuel indicatif
                     val dayFactor = date.dayOfYear % 10
                     val p1 = if (dayIsFuture) 0f else 0.4f + (dayFactor * 0.05f)
                     val p2 = if (dayIsFuture) 0f else 0.3f + (dayFactor * 0.04f)
@@ -160,7 +165,7 @@ fun ActivityDetailsScreen(onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // --- 3. GRANDS ANNEAUX CENTRAUX ---
+        // 3. GRANDS ANNEAUX CENTRAUX
         item {
             Box(
                 modifier = Modifier.fillMaxWidth(),
@@ -176,21 +181,21 @@ fun ActivityDetailsScreen(onBackClick: () -> Unit) {
             Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // --- 4. SECTION SAUTS (ROUGE) ---
+        // 4. SECTION SAUTS (ROUGE)
         item {
             ActivityDetailChartSection(
                 title = "Sauts",
                 value = sautsValue,
-                unit = "", // Pas d'unité texte, juste le chiffre
+                unit = "",
                 goal = "/ 2 000",
                 color = Color(0xFFFA114F),
-                maxChartValue = "150 SAUTS",
+                maxChartValue = "En direct",
                 isFuture = isFuture
             )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // --- 5. SECTION TEMPS ACTIF (VERT) ---
+        // 5. SECTION TEMPS ACTIF (VERT)
         item {
             ActivityDetailChartSection(
                 title = "Temps Actif",
@@ -198,28 +203,26 @@ fun ActivityDetailsScreen(onBackClick: () -> Unit) {
                 unit = "MN",
                 goal = " / 30",
                 color = Color(0xFF92E52A),
-                maxChartValue = "6 MN",
+                maxChartValue = "En direct",
                 isFuture = isFuture
             )
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // --- 6. SECTION KCAL (BLEU) ---
+        // 6. SECTION KCAL (BLEU)
         item {
             ActivityDetailChartSection(
                 title = "Kcal",
                 value = kcalValue,
-                unit = "", // Pas d'unité texte
+                unit = "",
                 goal = "/ 300",
                 color = Color(0xFF00D8FE),
-                maxChartValue = "40 KCAL",
+                maxChartValue = "En direct",
                 isFuture = isFuture
             )
         }
     }
 }
-
-// --- SOUS-COMPOSANTS ---
 
 @Composable
 fun FlexibleActivityRings(size: Dp, strokeWidth: Dp, progresses: List<Float>, isFuture: Boolean = false) {
@@ -227,16 +230,16 @@ fun FlexibleActivityRings(size: Dp, strokeWidth: Dp, progresses: List<Float>, is
     val size2 = size * 0.7f
     val size3 = size * 0.4f
 
-    val color1 = Color(0xFFFA114F) // Rouge : Sauts
-    val color2 = Color(0xFF92E52A) // Vert : Temps Actif
-    val color3 = Color(0xFF00D8FE) // Bleu : Kcal
+    val color1 = Color(0xFFFA114F)
+    val color2 = Color(0xFF92E52A)
+    val color3 = Color(0xFF00D8FE)
 
     val trackAlpha = if (isFuture) 0.05f else 0.2f
 
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(size)) {
-        CircularProgressIndicator(progress = progresses[0], modifier = Modifier.size(size1), color = color1, strokeWidth = strokeWidth, trackColor = color1.copy(alpha = trackAlpha), strokeCap = StrokeCap.Round)
-        CircularProgressIndicator(progress = progresses[1], modifier = Modifier.size(size2), color = color2, strokeWidth = strokeWidth, trackColor = color2.copy(alpha = trackAlpha), strokeCap = StrokeCap.Round)
-        CircularProgressIndicator(progress = progresses[2], modifier = Modifier.size(size3), color = color3, strokeWidth = strokeWidth, trackColor = color3.copy(alpha = trackAlpha), strokeCap = StrokeCap.Round)
+        CircularProgressIndicator(progress = { progresses[0] }, modifier = Modifier.size(size1), color = color1, strokeWidth = strokeWidth, trackColor = color1.copy(alpha = trackAlpha), strokeCap = StrokeCap.Round)
+        CircularProgressIndicator(progress = { progresses[1] }, modifier = Modifier.size(size2), color = color2, strokeWidth = strokeWidth, trackColor = color2.copy(alpha = trackAlpha), strokeCap = StrokeCap.Round)
+        CircularProgressIndicator(progress = { progresses[2] }, modifier = Modifier.size(size3), color = color3, strokeWidth = strokeWidth, trackColor = color3.copy(alpha = trackAlpha), strokeCap = StrokeCap.Round)
     }
 }
 

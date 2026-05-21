@@ -11,9 +11,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,17 +25,28 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fr.isen.emmykarsenti.nicolasbetoin.sauty.ble.BleManager
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
 fun DashboardScreen(
+    bleManager: BleManager,
     onProfileClick: () -> Unit,
     onActivityRingsClick: () -> Unit,
     onSessionClick: () -> Unit
 ) {
     val currentDate = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.FRANCE)).uppercase()
+
+    // CONNEXION AUX VRAIES DONNÉES BLE
+    val currentJumps by bleManager.jumpsState.collectAsState()
+    val currentCalories by bleManager.caloriesState.collectAsState()
+
+    // Calcul de la progression en direct
+    val ring1Progress = (currentJumps.toFloat() / 2000f).coerceAtMost(1f)
+    val ring2Progress = 0.5f // Temps actif simulé
+    val ring3Progress = (currentCalories.toFloat() / 300f).coerceAtMost(1f)
 
     LazyColumn(
         modifier = Modifier
@@ -43,7 +55,7 @@ fun DashboardScreen(
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
     ) {
-        // --- 1. EN-TÊTE ---
+        // 1. EN-TÊTE
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -67,7 +79,7 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // --- 2. ANNEAUX D'ACTIVITÉ (Style Apple) ---
+        // 2. ANNEAUX D'ACTIVITÉ
         item {
             Card(
                 modifier = Modifier
@@ -85,14 +97,14 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        FlexibleActivityRings(size = 110.dp, strokeWidth = 14.dp, progresses = listOf(0.6f, 0.5f, 0.5f))
+                        FlexibleActivityRings(size = 110.dp, strokeWidth = 14.dp, progresses = listOf(ring1Progress, ring2Progress, ring3Progress))
 
                         Spacer(modifier = Modifier.width(24.dp))
 
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            AppleMetricRow("Sauts", "1 250", "2 000", "SAUTS", Color(0xFFFA114F))
+                            AppleMetricRow("Sauts", currentJumps.toString(), "2 000", "SAUTS", Color(0xFFFA114F))
                             AppleMetricRow("Temps Actif", "15", "30", "MIN", Color(0xFF92E52A))
-                            AppleMetricRow("Kcal", "150", "300", "KCAL", Color(0xFF00D8FE))
+                            AppleMetricRow("Kcal", currentCalories.toString(), "300", "KCAL", Color(0xFF00D8FE))
                         }
                     }
                 }
@@ -100,7 +112,7 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // --- 3. SESSION (Dernière) - Bulle Unique ---
+        // 3. SESSION (Dernière) - SANS DOUBLE SAUTS
         item {
             Card(
                 modifier = Modifier
@@ -123,35 +135,34 @@ fun DashboardScreen(
 
                     SessionStatRow(title = "Temps d'entraînement", value = "15 min", subtitle = null)
                     HorizontalDivider(color = Color(0xFF2C2C2E), modifier = Modifier.padding(vertical = 12.dp))
-                    SessionStatRow(title = "Sauts", value = "115 /min", subtitle = "1 250 total")
-                    HorizontalDivider(color = Color(0xFF2C2C2E), modifier = Modifier.padding(vertical = 12.dp))
-                    SessionStatRow(title = "Double sauts", value = "10 /min", subtitle = "50 total")
+
+                    // Calcul de la fréquence de saut moyenne en direct (Sauts / 15 min)
+                    val jumpsPerMin = if (currentJumps > 0) currentJumps / 15 else 0
+                    SessionStatRow(title = "Sauts", value = "$jumpsPerMin /min", subtitle = "$currentJumps total")
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // --- 4. TENDANCES ---
+        // 4. TENDANCES - SANS DOUBLE SAUTS
         item {
-            TrendsCard()
+            TrendsCard(currentJumps = currentJumps, currentCalories = currentCalories)
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
 
-// --- SOUS-COMPOSANT : MÉTRIQUE STYLE APPLE ---
 @Composable
 fun AppleMetricRow(title: String, value: String, max: String, unit: String, color: Color) {
     Column {
         Text(text = title, color = Color.White, fontSize = 14.sp)
         Row(verticalAlignment = Alignment.Bottom) {
             Text(text = value, color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            Text(text = "/$max $unit", color = color.copy(alpha = 0.8f), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(text = "/$max $unit", color = color.copy(alpha = 0.8f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 2.dp, start = 2.dp))
         }
     }
 }
 
-// --- SOUS-COMPOSANT : LIGNE DE STATISTIQUE SESSION ---
 @Composable
 fun SessionStatRow(title: String, value: String, subtitle: String?) {
     Row(
@@ -169,16 +180,14 @@ fun SessionStatRow(title: String, value: String, subtitle: String?) {
     }
 }
 
-// --- COMPOSANT : LA CARTE TENDANCES ---
 @Composable
-fun TrendsCard() {
+fun TrendsCard(currentJumps: Int, currentCalories: Int) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // En-tête de la carte
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -190,28 +199,23 @@ fun TrendsCard() {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Disposition sur deux colonnes
             Row(modifier = Modifier.fillMaxWidth()) {
-                // Colonne de Gauche
+                // Colonne de Gauche (Sauts et Calories)
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     TrendItem(
                         icon = Icons.Default.KeyboardArrowUp, iconColor = Color(0xFFFA114F),
-                        title = "Sauts", value = "1 250 /JOUR", valueColor = Color(0xFFFA114F)
-                    )
-                    TrendItem(
-                        icon = Icons.Default.KeyboardArrowUp, iconColor = Color(0xFF00D8FE),
-                        title = "Double sauts", value = "50 /JOUR", valueColor = Color(0xFF00D8FE)
+                        title = "Sauts", value = "$currentJumps /JOUR", valueColor = Color(0xFFFA114F)
                     )
                     TrendItem(
                         icon = Icons.Default.KeyboardArrowUp, iconColor = Color(0xFFFF9800),
-                        title = "Kcal", value = "220 /JOUR", valueColor = Color(0xFFFF9800)
+                        title = "Kcal", value = "$currentCalories /JOUR", valueColor = Color(0xFFFF9800)
                     )
                 }
 
-                // Colonne de Droite
+                // Colonne de Droite (Temps d'entraînement et Fréquence)
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -220,13 +224,10 @@ fun TrendsCard() {
                         icon = Icons.Default.KeyboardArrowUp, iconColor = Color(0xFF92E52A),
                         title = "Temps d'entrain.", value = "15 MIN/JOUR", valueColor = Color(0xFF92E52A)
                     )
+                    val avgJumps = if (currentJumps > 0) currentJumps / 15 else 0
                     TrendItem(
                         icon = Icons.Default.KeyboardArrowUp, iconColor = Color(0xFFE040FB),
-                        title = "Sauts / min", value = "115 /MIN", valueColor = Color(0xFFE040FB)
-                    )
-                    TrendItem(
-                        icon = Icons.Default.Remove, iconColor = Color(0xFFFFD600),
-                        title = "Double sauts / min", value = "-/- /MIN", valueColor = Color(0xFFFFD600)
+                        title = "Sauts / min", value = "$avgJumps /MIN", valueColor = Color(0xFFE040FB)
                     )
                 }
             }
@@ -234,7 +235,6 @@ fun TrendsCard() {
     }
 }
 
-// --- SOUS-COMPOSANT : UN ÉLÉMENT DE TENDANCE ---
 @Composable
 fun TrendItem(
     icon: ImageVector,

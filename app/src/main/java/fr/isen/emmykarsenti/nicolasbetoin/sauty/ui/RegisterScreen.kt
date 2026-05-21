@@ -48,7 +48,7 @@ fun RegisterScreen(
     var password by remember { mutableStateOf("") }
 
     var isUsernameTaken by remember { mutableStateOf(false) }
-    var isLoading by remember { mutableStateOf(false) } // 🎯 Nouvel état pour faire patienter l'utilisateur
+    var isLoading by remember { mutableStateOf(false) }
 
     var showDialog by remember { mutableStateOf(false) }
     var photoUri by remember { mutableStateOf<Uri?>(null) }
@@ -118,20 +118,16 @@ fun RegisterScreen(
         OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Mot de passe") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(32.dp))
 
-        // LE BOUTON MAGIQUE CONNECTÉ À FIREBASE
         Button(
             onClick = {
                 if (email.isNotEmpty() && password.isNotEmpty() && identifiant.isNotEmpty()) {
                     isLoading = true
 
-                    // 1. Création du compte sécurisé dans Firebase Auth
                     FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, password)
                         .addOnCompleteListener { task ->
                             if (task.isSuccessful) {
-                                // Le compte est créé, on récupère l'ID unique de l'utilisateur
                                 val userId = task.result?.user?.uid ?: ""
 
-                                // 2. On prépare les données du profil
                                 val userProfile = mapOf(
                                     "prenom" to prenom,
                                     "nom" to nom,
@@ -140,7 +136,6 @@ fun RegisterScreen(
                                     "email" to email
                                 )
 
-                                // 3. On sauvegarde dans ta Realtime Database
                                 val database = FirebaseDatabase.getInstance("https://sauty-ekarsenti-nbetoin-default-rtdb.europe-west1.firebasedatabase.app/")
                                 val myRef = database.getReference("users").child(userId)
 
@@ -163,7 +158,7 @@ fun RegisterScreen(
                 }
             },
             modifier = Modifier.fillMaxWidth().height(50.dp),
-            enabled = !isLoading // Désactive le bouton pendant le chargement
+            enabled = !isLoading
         ) {
             if (isLoading) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
@@ -186,7 +181,6 @@ fun RegisterScreen(
     }
 }
 
-// Outil de formatage pour la date
 class DateVisualTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val trimmed = if (text.text.length >= 8) text.text.substring(0..7) else text.text

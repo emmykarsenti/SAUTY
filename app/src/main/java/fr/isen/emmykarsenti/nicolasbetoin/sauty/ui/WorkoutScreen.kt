@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 fun WorkoutScreen(
-    jumpsCount: Int, // Le nombre de sauts qui viendra du Bluetooth
-    timerString: String, // Le chrono géré par le ViewModel
+    jumpsCount: Int,
+    timerString: String,
     calories: Int,
     onStartPauseClick: () -> Unit,
     onStopClick: () -> Unit,
@@ -35,7 +35,7 @@ fun WorkoutScreen(
         verticalArrangement = Arrangement.SpaceBetween
     ) {
 
-        // --- LES STATISTIQUES EN DIRECT ---
+        // LES STATISTIQUES EN DIRECT
         Column(
             horizontalAlignment = Alignment.Start,
             modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 40.dp)
@@ -54,7 +54,7 @@ fun WorkoutScreen(
             }
         }
 
-        // --- PANNEAU DE CONTRÔLE (Bas de l'écran) ---
+        // PANNEAU DE CONTRÔLE
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
             shape = RoundedCornerShape(32.dp),
@@ -67,7 +67,7 @@ fun WorkoutScreen(
                 // CHRONOMÈTRE
                 Text(
                     text = timerString,
-                    color = Color(0xFFE5D52A), // Jaune style Apple
+                    color = Color(0xFFE5D52A),
                     fontSize = 48.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -79,7 +79,6 @@ fun WorkoutScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    // Bouton Stop
                     FloatingActionButton(
                         onClick = onStopClick,
                         containerColor = Color.DarkGray,
@@ -89,13 +88,12 @@ fun WorkoutScreen(
                         Icon(Icons.Default.Stop, contentDescription = "Stop", modifier = Modifier.size(32.dp))
                     }
 
-                    // Bouton Play/Pause
                     FloatingActionButton(
                         onClick = onStartPauseClick,
                         containerColor = if (isRunning) Color(0xFFE5D52A) else Color(0xFF92E52A),
                         contentColor = Color.Black,
                         shape = CircleShape,
-                        modifier = Modifier.size(72.dp) // Plus gros
+                        modifier = Modifier.size(72.dp)
                     ) {
                         Icon(
                             imageVector = if (isRunning) Icons.Default.Pause else Icons.Default.PlayArrow,

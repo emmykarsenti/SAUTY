@@ -25,7 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// --- 1. MODÈLE DE DONNÉES ---
+// 1. MODÈLE DE DONNÉES (Sans les doubles sauts)
 data class JumpSession(
     val id: String,
     val dateLabel: String,
@@ -33,20 +33,18 @@ data class JumpSession(
     val duration: String,
     val totalJumps: String,
     val jumpsPerMin: String,
-    val doubleJumpsTotal: String,
-    val doubleJumpsPerMin: String,
     val kcal: String
 )
 
-// --- 2. DONNÉES FACTICES (Triées de la plus récente à la plus ancienne). ---
+// 2. DONNÉES FACTICES (Sans les doubles sauts).
 val mockSessionsHistory = listOf(
-    JumpSession("1", "jeu. 9 avril", "14:00–14:15", "15:00", "1 250", "115", "50", "10", "150"),
-    JumpSession("2", "mer. 8 avril", "18:30–18:45", "15:00", "1 100", "105", "30", "5", "135"),
-    JumpSession("3", "mar. 7 avril", "09:00–09:20", "20:00", "1 600", "110", "45", "8", "190"),
-    JumpSession("4", "dim. 5 avril", "10:15–10:30", "15:00", "1 200", "112", "40", "9", "145"),
-    JumpSession("5", "ven. 3 avril", "19:00–19:10", "10:00", "850", "115", "20", "6", "100"),
-    JumpSession("6", "mer. 1 avril", "14:00–14:20", "20:00", "1 550", "108", "35", "7", "185"),
-    JumpSession("7", "lun. 30 mars", "17:45–18:00", "15:00", "1 150", "109", "25", "4", "140")
+    JumpSession("1", "jeu. 9 avril", "14:00–14:15", "15:00", "1 250", "115", "150"),
+    JumpSession("2", "mer. 8 avril", "18:30–18:45", "15:00", "1 100", "105", "135"),
+    JumpSession("3", "mar. 7 avril", "09:00–09:20", "20:00", "1 600", "110", "190"),
+    JumpSession("4", "dim. 5 avril", "10:15–10:30", "15:00", "1 200", "112", "145"),
+    JumpSession("5", "ven. 3 avril", "19:00–19:10", "10:00", "850", "115", "100"),
+    JumpSession("6", "mer. 1 avril", "14:00–14:20", "20:00", "1 550", "108", "185"),
+    JumpSession("7", "lun. 30 mars", "17:45–18:00", "15:00", "1 150", "109", "140")
 )
 
 @Composable
@@ -62,7 +60,7 @@ fun SessionDetailScreen(
             .background(Color.Black),
         contentPadding = PaddingValues(bottom = 32.dp)
     ) {
-        // --- EN-TÊTE ---
+        // EN-TÊTE
         item {
             Row(
                 modifier = Modifier
@@ -87,7 +85,7 @@ fun SessionDetailScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // --- TITRE DE L'EXERCICE (Avec espace pour ton icône) ---
+        // TITRE DE L'EXERCICE
         item {
             Row(
                 modifier = Modifier
@@ -99,13 +97,9 @@ fun SessionDetailScreen(
                     modifier = Modifier
                         .size(64.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF2E3A18)), // Vert olive foncé du design
+                        .background(Color(0xFF2E3A18)),
                     contentAlignment = Alignment.Center
                 ) {
-                    // ----> REMPLACE CE BLOC PAR TON ICÔNE <----
-                    // Décommente la ligne suivante et supprime l'icône FitnessCenter :
-                    // Icon(painter = painterResource(id = R.drawable.nom_de_ton_icone_corde), contentDescription = null, tint = Color(0xFF92E52A), modifier = Modifier.size(32.dp))
-
                     Icon(imageVector = Icons.Default.FitnessCenter, contentDescription = null, tint = Color(0xFF92E52A), modifier = Modifier.size(32.dp))
                 }
 
@@ -119,7 +113,7 @@ fun SessionDetailScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // --- CARTE DÉTAILS (Session Actuelle, SANS flèche) ---
+        // CARTE DÉTAILS
         item {
             SessionDetailsCard(
                 session = currentSession,
@@ -129,7 +123,7 @@ fun SessionDetailScreen(
             Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // --- SECTION : AUTRES SESSIONS ---
+        // SECTION : AUTRES SESSIONS
         item {
             Text(
                 text = "Sessions précédentes",
@@ -140,7 +134,7 @@ fun SessionDetailScreen(
             )
         }
 
-        // --- CARROUSEL ---
+        // CARROUSEL
         item {
             AnimatedVisibility(visible = !showAllSessions) {
                 LazyRow(
@@ -160,11 +154,11 @@ fun SessionDetailScreen(
             }
         }
 
-        // --- BOUTON VOIR PLUS ---
+        // BOUTON VOIR PLUS
         item {
             Text(
                 text = if (showAllSessions) "Voir moins" else "Voir tout l'historique",
-                color = Color(0xFFFA114F), // Rouge Sauty
+                color = Color(0xFFFA114F),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -175,7 +169,7 @@ fun SessionDetailScreen(
             )
         }
 
-        // --- LISTE COMPLÈTE ---
+        // LISTE COMPLÈTE
         if (showAllSessions) {
             items(mockSessionsHistory.drop(1)) { session ->
                 SessionDetailsCard(
@@ -190,7 +184,7 @@ fun SessionDetailScreen(
     }
 }
 
-// --- SOUS-COMPOSANT : CARTE DE DÉTAILS D'UNE SESSION ---
+// SOUS-COMPOSANT : CARTE DE DÉTAILS D'UNE SESSION
 @Composable
 fun SessionDetailsCard(
     session: JumpSession,
@@ -205,7 +199,6 @@ fun SessionDetailsCard(
         Column(modifier = Modifier.padding(16.dp)) {
 
             if (showTitle) {
-                // TITRE DE LA CARTE, SANS LA FLÈCHE ">"
                 Text(
                     text = "Détails de l'exercice",
                     color = Color.White,
@@ -224,7 +217,7 @@ fun SessionDetailsCard(
 
             Spacer(modifier = Modifier.height(if (showTitle) 24.dp else 16.dp))
 
-            // GRILLE DES STATS
+            // GRILLE DES STATS (Sans double sauts)
             Row(modifier = Modifier.fillMaxWidth()) {
                 // Colonne de Gauche
                 Column(
@@ -233,7 +226,6 @@ fun SessionDetailsCard(
                 ) {
                     StatItem(label = "Durée de l'exercice", value = session.duration, unit = "", valueColor = Color(0xFFFFD600))
                     StatItem(label = "Sauts / min moy.", value = session.jumpsPerMin, unit = " /MIN", valueColor = Color(0xFFE040FB))
-                    StatItem(label = "Double sauts / min", value = session.doubleJumpsPerMin, unit = " /MIN", valueColor = Color(0xFFFF9800))
                 }
 
                 // Colonne de Droite
@@ -242,7 +234,6 @@ fun SessionDetailsCard(
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
                     StatItem(label = "Sauts totaux", value = session.totalJumps, unit = " SAUTS", valueColor = Color(0xFFFA114F))
-                    StatItem(label = "Double sauts totaux", value = session.doubleJumpsTotal, unit = " SAUTS", valueColor = Color(0xFFFF9800))
                     StatItem(label = "Kcal en activité", value = session.kcal, unit = " KCAL", valueColor = Color(0xFF00D8FE))
                 }
             }
@@ -250,7 +241,6 @@ fun SessionDetailsCard(
     }
 }
 
-// --- SOUS-COMPOSANT : UN ÉLÉMENT DE STATISTIQUE ---
 @Composable
 fun StatItem(label: String, value: String, unit: String, valueColor: Color) {
     Column {

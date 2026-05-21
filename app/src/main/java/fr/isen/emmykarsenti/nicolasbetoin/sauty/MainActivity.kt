@@ -28,7 +28,7 @@ import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.DashboardScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.LoginScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.ProfileScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.RegisterScreen
-import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionDetailScreen // <-- IMPORT AJOUTÉ
+import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionDetailScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.viewmodel.SautyViewModel
 
 class MainActivity : ComponentActivity() {
@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.entries.all { it.value }) {
-            Toast.makeText(this, "Permissions BLE accordées ! \uD83D\uDE80", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Permissions BLE accordées ! 🚀", Toast.LENGTH_SHORT).show()
 
             // On tente l'auto-connexion silencieuse dès que les permissions sont OK
             bleManager.tryAutoConnect()
@@ -153,6 +153,7 @@ class MainActivity : ComponentActivity() {
                         // ÉCRAN 3 : LE DASHBOARD (RÉSUMÉ)
                         composable("dashboard") {
                             DashboardScreen(
+                                bleManager = bleManager,
                                 onProfileClick = { navController.navigate("profile") },
                                 onActivityRingsClick = { navController.navigate("activityDetails") },
                                 onSessionClick = { navController.navigate("sessionDetail") }
@@ -184,20 +185,21 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // ÉCRAN 6 : DÉTAIL DES ANNEAUX (Nom de route corrigé)
+                        // ÉCRAN 6 : DÉTAIL DES ANNEAUX
                         composable("activityDetails") {
                             ActivityDetailsScreen(
+                                bleManager = bleManager,
                                 onBackClick = {
-                                    navController.popBackStack() // Retour en arrière
+                                    navController.popBackStack()
                                 }
                             )
                         }
 
-                        // ÉCRAN 7 : DÉTAIL DE LA SESSION (Route ajoutée)
+                        // ÉCRAN 7 : DÉTAIL DE LA SESSION
                         composable("sessionDetail") {
                             SessionDetailScreen(
                                 onBackClick = {
-                                    navController.popBackStack() // Retour en arrière
+                                    navController.popBackStack()
                                 }
                             )
                         }

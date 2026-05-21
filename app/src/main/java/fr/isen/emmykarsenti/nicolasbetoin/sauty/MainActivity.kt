@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,28 +24,25 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ble.BleManager
-import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.ActivityDetailsScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.DashboardScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.LoginScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.ProfileScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.RegisterScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionDetailScreen
+import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.TrendsDetailScreen
+import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.WorkoutScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.viewmodel.SautyViewModel
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var bleManager: BleManager
 
-    // Le lanceur pour les permissions.
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.entries.all { it.value }) {
-            Toast.makeText(this, "Permissions BLE accordées ! 🚀", Toast.LENGTH_SHORT).show()
-
-            // On tente l'auto-connexion silencieuse dès que les permissions sont OK
+            Toast.makeText(this, "Permissions BLE accordées ! \uD83D\uDE80", Toast.LENGTH_SHORT).show()
             bleManager.tryAutoConnect()
-
         } else {
             Toast.makeText(this, "Erreur : Le Bluetooth est obligatoire.", Toast.LENGTH_LONG).show()
         }
@@ -56,31 +54,23 @@ class MainActivity : ComponentActivity() {
         bleManager = BleManager(this)
         checkAndRequestBluetoothPermissions()
 
-        // --- LOGIQUE RESTER CONNECTÉ ---
         val user = FirebaseAuth.getInstance().currentUser
         val initialStartDestination = if (user != null) "dashboard" else "login"
 
         setContent {
             val viewModel: SautyViewModel = viewModel()
 
-            // ON BRANCHE LE TUYAU : Quand le BleManager envoie un message, on le donne au ViewModel.
             bleManager.onStatusMessage = { message ->
                 viewModel.updateStatus(message)
             }
 
-            // Forçage du Mode Sombre sur toute l'application
             MaterialTheme(colorScheme = darkColorScheme()) {
-                // 1. CRÉATION DE L'AIGUILLEUR (NavController)
                 val navController = rememberNavController()
-
-                // On observe sur quel écran on se trouve actuellement
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
-                // On gère les écrans qui ont le droit d'afficher la barre du bas (Profil retiré)
-                val showBottomBar = currentRoute in listOf("dashboard", "scan")
+                val showBottomBar = currentRoute in listOf("dashboard", "workout", "scan")
 
-                // 2. LE SCAFFOLD : La structure principale qui contient la barre de navigation
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
@@ -100,6 +90,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                                 NavigationBarItem(
+                                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Exercice") },
+                                    label = { Text("Exercice") },
+                                    selected = currentRoute == "workout",
+                                    onClick = {
+                                        navController.navigate("workout") {
+                                            popUpTo("dashboard") { inclusive = false }
+                                            launchSingleTop = true
+                                        }
+                                    }
+                                )
+                                NavigationBarItem(
                                     icon = { Icon(Icons.Default.Bluetooth, contentDescription = "Scanner") },
                                     label = { Text("Scanner") },
                                     selected = currentRoute == "scan",
@@ -114,14 +115,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { innerPadding ->
-                    // 3. DÉFINITION DU CHEMIN DE NAVIGATION
                     NavHost(
                         navController = navController,
                         startDestination = initialStartDestination,
                         modifier = Modifier.padding(innerPadding)
                     ) {
 
-                        // ÉCRAN 1 : CONNEXION
                         composable("login") {
                             LoginScreen(
                                 onLoginSuccess = {
@@ -135,7 +134,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // ÉCRAN 2 : INSCRIPTION
                         composable("register") {
                             RegisterScreen(
                                 onRegisterSuccess = {
@@ -150,57 +148,60 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // ÉCRAN 3 : LE DASHBOARD (RÉSUMÉ)
                         composable("dashboard") {
                             DashboardScreen(
                                 bleManager = bleManager,
+                                viewModel = viewModel,
                                 onProfileClick = { navController.navigate("profile") },
-                                onActivityRingsClick = { navController.navigate("activityDetails") },
-                                onSessionClick = { navController.navigate("sessionDetail") }
+                                onSessionClick = { navController.navigate("sessionDetail") },
+                                onTrendsClick = { navController.navigate("trendsDetail") }
                             )
                         }
 
-                        // ÉCRAN 4 : SCANNER BLUETOOTH
+                        composable("workout") {
+                            val timerString by viewModel.timerString.collectAsState()
+                            val jumpsCount by viewModel.jumpsCount.collectAsState()
+                            val calories by viewModel.calories.collectAsState()
+                            val isRunning by viewModel.isRunning.collectAsState()
+
+                            WorkoutScreen(
+                                timerString = timerString,
+                                jumpsCount = jumpsCount,
+                                calories = calories,
+                                isRunning = isRunning,
+                                onStartPauseClick = { viewModel.toggleWorkout() },
+                                onStopClick = { viewModel.stopWorkout() }
+                            )
+                        }
+
                         composable("scan") {
                             SautyScanScreen(
-                                onStartScanClick = {
-                                    bleManager.startScan()
-                                },
-                                onDisconnectClick = {
-                                    bleManager.disconnectAndForget() // Déclenche l'oubli
-                                },
+                                onStartScanClick = { bleManager.startScan() },
+                                onDisconnectClick = { bleManager.disconnectAndForget() },
                                 viewModel = viewModel
                             )
                         }
 
-                        // ÉCRAN 5 : PROFIL
                         composable("profile") {
                             ProfileScreen(
                                 onLogout = {
                                     navController.navigate("login") {
-                                        // On efface tout l'historique pour empêcher le retour en arrière
                                         popUpTo(0) { inclusive = true }
                                     }
                                 }
                             )
                         }
 
-                        // ÉCRAN 6 : DÉTAIL DES ANNEAUX
-                        composable("activityDetails") {
-                            ActivityDetailsScreen(
-                                bleManager = bleManager,
-                                onBackClick = {
-                                    navController.popBackStack()
-                                }
+                        composable("trendsDetail") {
+                            TrendsDetailScreen(
+                                onBackClick = { navController.popBackStack() }
                             )
                         }
 
-                        // ÉCRAN 7 : DÉTAIL DE LA SESSION
+                        // CORRECTION ICI : On ne passe plus le viewModel car c'est un écran de test visuel
                         composable("sessionDetail") {
                             SessionDetailScreen(
-                                onBackClick = {
-                                    navController.popBackStack()
-                                }
+                                onBackClick = { navController.popBackStack() }
                             )
                         }
                     }
@@ -219,7 +220,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// COMPOSANT SCANNER MIS À JOUR
 @Composable
 fun SautyScanScreen(
     onStartScanClick: () -> Unit,
@@ -238,17 +238,13 @@ fun SautyScanScreen(
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.primary
         )
-
         Spacer(modifier = Modifier.height(16.dp))
-
         Text(
             text = statusText,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.secondary
         )
-
         Spacer(modifier = Modifier.height(32.dp))
-
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -259,7 +255,6 @@ fun SautyScanScreen(
             }) {
                 Text(text = "SCANNER", style = MaterialTheme.typography.titleMedium)
             }
-
             Button(
                 onClick = { onDisconnectClick() },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)

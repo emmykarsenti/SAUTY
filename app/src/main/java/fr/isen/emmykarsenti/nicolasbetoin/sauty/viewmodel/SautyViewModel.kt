@@ -2,8 +2,10 @@ package fr.isen.emmykarsenti.nicolasbetoin.sauty.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.model.DailyTrendData
@@ -19,9 +21,12 @@ import java.util.*
 
 class SautyViewModel : ViewModel() {
 
-    // CONNEXION REEL FIREBASE DATABASE
+    // CONNEXION RÉELLE FIREBASE DATABASE
     private val database = FirebaseDatabase.getInstance()
-    private val historyRef = database.getReference("sessions/history")
+
+    // Référence dynamique qui s'adaptera à l'utilisateur connecté
+    private var historyRef: DatabaseReference? = null
+    private var firebaseListener: ValueEventListener? = null
 
     private val _connectionStatus = MutableStateFlow("Déconnecté")
     val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
@@ -69,30 +74,45 @@ class SautyViewModel : ViewModel() {
     val weeklyTrends: StateFlow<List<DailyTrendData>> = _weeklyTrends.asStateFlow()
 
     init {
-        // Au démarrage du ViewModel, on commence à écouter Firebase
-        listenToFirebaseHistory()
+        // Récupération automatique de l'UID de l'utilisateur actuellement connecté sur le téléphone
+        val currentUid = FirebaseAuth.getInstance().currentUser?.uid
+
+        if (currentUid != null) {
+            // On initialise le chemin Firebase avec son vrai UID unique
+            historyRef = database.getReference("users/$currentUid/history")
+            listenToFirebaseHistory()
+        } else {
+            // Fallback temporaire si aucun utilisateur n'est connecté (ex: phase de dev)
+            historyRef = database.getReference("users/invite/history")
+            listenToFirebaseHistory()
+        }
     }
 
     // ÉCOUTE EN TEMPS RÉEL DE L'HISTORIQUE FIREBASE
     private fun listenToFirebaseHistory() {
-        historyRef.addValueEventListener(object : ValueEventListener {
+        val ref = historyRef ?: return
+
+        // Supprime l'ancien écouteur si la fonction est rappelée
+        firebaseListener?.let { ref.removeEventListener(it) }
+
+        firebaseListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val tempList = mutableListOf<WorkoutSession>()
                 for (child in snapshot.children) {
-                    // Firebase reconstruit automatiquement ton objet WorkoutSession
                     val session = child.getValue(WorkoutSession::class.java)
                     if (session != null) {
                         tempList.add(session)
                     }
                 }
-                // On inverse la liste pour avoir la session la plus récente en premier
                 _sessions.value = tempList.reversed()
             }
 
             override fun onCancelled(error: DatabaseError) {
                 println("Erreur Firebase History: ${error.message}")
             }
-        })
+        }
+
+        ref.addValueEventListener(firebaseListener!!)
     }
 
     // TRAITEMENT DES TRAMES DE L'EDGE IA PAR COMPORTEMENT
@@ -166,10 +186,12 @@ class SautyViewModel : ViewModel() {
                 doubleJumpsMin = doubleJumpsMinCalculated
             )
 
-            // --- SAUVEGARDE RÉELLE DANS FIREBASE ---
-            val key = historyRef.push().key
-            if (key != null) {
-                historyRef.child(key).setValue(newSession)
+            // --- SAUVEGARDE RÉELLE DANS LE DOSSIER DE L'UTILISATEUR ACTIF ---
+            historyRef?.let { ref ->
+                val key = ref.push().key
+                if (key != null) {
+                    ref.child(key).setValue(newSession)
+                }
             }
 
             // Détermination du jour actuel (ex: "lun.", "mar.")

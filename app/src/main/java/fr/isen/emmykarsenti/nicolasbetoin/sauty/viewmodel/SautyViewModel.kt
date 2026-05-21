@@ -2,6 +2,10 @@ package fr.isen.emmykarsenti.nicolasbetoin.sauty.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.model.DailyTrendData
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.model.WorkoutSession
 import kotlinx.coroutines.Job
@@ -14,6 +18,10 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class SautyViewModel : ViewModel() {
+
+    // CONNEXION REEL FIREBASE DATABASE
+    private val database = FirebaseDatabase.getInstance()
+    private val historyRef = database.getReference("sessions/history")
 
     private val _connectionStatus = MutableStateFlow("Déconnecté")
     val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
@@ -42,11 +50,11 @@ class SautyViewModel : ViewModel() {
     val targetMinutes = 30
     val targetKcal = 300
 
-    // SESSIONS ENREGISTRÉES (Initialement vide, se remplit via STM32)
+    // SESSIONS ENREGISTRÉES (Alimenté en temps réel par Firebase !)
     private val _sessions = MutableStateFlow<List<WorkoutSession>>(emptyList())
     val sessions: StateFlow<List<WorkoutSession>> = _sessions.asStateFlow()
 
-    // DONNÉES HEBDOMADAIRES DES TENDANCES (Vides par défaut)
+    // DONNÉES HEBDOMADAIRES DES TENDANCES
     private val _weeklyTrends = MutableStateFlow(
         listOf(
             DailyTrendData("lun.", 0f, 0f, 0f, 0f),
@@ -59,6 +67,33 @@ class SautyViewModel : ViewModel() {
         )
     )
     val weeklyTrends: StateFlow<List<DailyTrendData>> = _weeklyTrends.asStateFlow()
+
+    init {
+        // Au démarrage du ViewModel, on commence à écouter Firebase
+        listenToFirebaseHistory()
+    }
+
+    // ÉCOUTE EN TEMPS RÉEL DE L'HISTORIQUE FIREBASE
+    private fun listenToFirebaseHistory() {
+        historyRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val tempList = mutableListOf<WorkoutSession>()
+                for (child in snapshot.children) {
+                    // Firebase reconstruit automatiquement ton objet WorkoutSession
+                    val session = child.getValue(WorkoutSession::class.java)
+                    if (session != null) {
+                        tempList.add(session)
+                    }
+                }
+                // On inverse la liste pour avoir la session la plus récente en premier
+                _sessions.value = tempList.reversed()
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                println("Erreur Firebase History: ${error.message}")
+            }
+        })
+    }
 
     // TRAITEMENT DES TRAMES DE L'EDGE IA PAR COMPORTEMENT
     fun updateStatus(message: String) {
@@ -131,8 +166,11 @@ class SautyViewModel : ViewModel() {
                 doubleJumpsMin = doubleJumpsMinCalculated
             )
 
-            // Ajout à l'historique
-            _sessions.value = listOf(newSession) + _sessions.value
+            // --- SAUVEGARDE RÉELLE DANS FIREBASE ---
+            val key = historyRef.push().key
+            if (key != null) {
+                historyRef.child(key).setValue(newSession)
+            }
 
             // Détermination du jour actuel (ex: "lun.", "mar.")
             val dayFormat = SimpleDateFormat("EEE", Locale.FRANCE)
@@ -140,7 +178,7 @@ class SautyViewModel : ViewModel() {
 
             // Mise à jour des courbes
             _weeklyTrends.value = _weeklyTrends.value.map {
-                if (it.dayLabel.equals(currentDayLabel, ignoreCase = true) || it.dayLabel == "jeu.") { // Fallback sur jeudi pour l'exemple si format différent
+                if (it.dayLabel.equals(currentDayLabel, ignoreCase = true) || it.dayLabel == "jeu.") {
                     DailyTrendData(
                         dayLabel = it.dayLabel,
                         jumps = it.jumps + _jumpsCount.value.toFloat(),

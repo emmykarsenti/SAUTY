@@ -198,9 +198,54 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // CORRECTION ICI : On ne passe plus le viewModel car c'est un écran de test visuel
                         composable("sessionDetail") {
+                            // 1. On récupère les données brutes de l'exercice en cours (STM32 Edge IA)
+                            val timerString by viewModel.timerString.collectAsState()
+                            val jumpsCount by viewModel.jumpsCount.collectAsState()
+                            val calories by viewModel.calories.collectAsState()
+                            val isRunning by viewModel.isRunning.collectAsState()
+
+                            // 2. On récupère la liste de l'historique provenant de Firebase
+                            val firebaseSessions by viewModel.sessions.collectAsState()
+
+                            // 3. Objet dynamique connecté aux données du STM32 pour l'exercice Actuel
+                            val currentSession = if (isRunning || jumpsCount > 0) {
+                                fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
+                                    id = "live",
+                                    date = java.text.SimpleDateFormat("EEE dd MMM", java.util.Locale.FRANCE).format(java.util.Date()),
+                                    timeRange = "Session en cours",
+                                    durationStr = timerString,
+                                    totalJumps = jumpsCount,
+                                    jumpsPerMin = 0, // Sera calculé à la fin, ou laisse à 0 pendant le live
+                                    kcal = calories,
+                                    jumpsProgress = jumpsCount.toFloat() / viewModel.targetJumps,
+                                    timeProgress = 0f, // Progression gérée dynamiquement si tu le souhaites
+                                    kcalProgress = calories.toFloat() / viewModel.targetKcal
+                                )
+                            } else {
+                                null // S'il n'y a pas d'exercice en cours, l'UI affichera l'indicateur de chargement ou un état vide
+                            }
+
+                            // 4. On convertit l'historique Firebase (WorkoutSession) vers le modèle d'affichage (SessionData)
+                            val pastSessions = firebaseSessions.map { workout ->
+                                fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
+                                    id = workout.date + workout.timeRange,
+                                    date = workout.date,
+                                    timeRange = workout.timeRange,
+                                    durationStr = String.format("%02d:%02d", workout.durationSeconds / 60, workout.durationSeconds % 60),
+                                    totalJumps = workout.jumpsTotal,
+                                    jumpsPerMin = workout.avgCadence,
+                                    kcal = workout.calories,
+                                    jumpsProgress = workout.jumpsTotal.toFloat() / viewModel.targetJumps,
+                                    timeProgress = (workout.durationSeconds / 60f) / viewModel.targetMinutes.toFloat(),
+                                    kcalProgress = workout.calories.toFloat() / viewModel.targetKcal
+                                )
+                            }
+
+                            // 5. On envoie le tout à l'écran qui conserve sa sublime esthétique !
                             SessionDetailScreen(
+                                currentSession = currentSession,
+                                pastSessions = pastSessions,
                                 onBackClick = { navController.popBackStack() }
                             )
                         }

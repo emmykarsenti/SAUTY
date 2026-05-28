@@ -90,7 +90,7 @@ fun WorkoutScreen(
 
                     FloatingActionButton(
                         onClick = onStartPauseClick,
-                        containerColor = if (isRunning) Color(0xFFE5D52A) else Color(0xFF92E52A),
+                        containerColor = if (isRunning) Color(0xFFE5D52A) else Color(0xFFFF521E),
                         contentColor = Color.Black,
                         shape = CircleShape,
                         modifier = Modifier.size(72.dp)

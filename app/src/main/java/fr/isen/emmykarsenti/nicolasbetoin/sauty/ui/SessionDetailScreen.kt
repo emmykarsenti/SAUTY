@@ -30,10 +30,10 @@ import java.io.File
 import java.io.FileOutputStream
 
 // COULEURS
-val colorPink = Color(0xFFFF2D55)
-val colorGreen = Color(0xFF30D158)
+val colorOrange = Color(0xFFFA9E1E)
+val colorRed = Color(0xFFFF521E)
 val colorCyan = Color(0xFF5AC8FA)
-val colorPurple = Color(0xFFAF52DE)
+val colorBlue = Color(0xFF3902FF)
 val textGray = Color(0xFF8E8E93)
 
 // MODÈLE DE DONNÉES (Prêt pour Firebase & STM32)
@@ -116,7 +116,7 @@ fun SessionDetailScreen(
                             Icon(
                                 painter = painterResource(id = android.R.drawable.ic_menu_today),
                                 contentDescription = null,
-                                tint = colorGreen,
+                                tint = colorRed,
                                 modifier = Modifier.size(32.dp)
                             )
                         }
@@ -145,13 +145,13 @@ fun SessionDetailScreen(
                         Box(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
                             Column(modifier = Modifier.fillMaxWidth(0.65f)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    StatItem(label = "Durée", value = currentSession.durationStr, unit = "", valueColor = colorGreen)
+                                    StatItem(label = "Durée", value = currentSession.durationStr, unit = "", valueColor = colorRed)
                                     // Utilisation de %,d pour formater les milliers (ex: 1250 -> 1 250)
-                                    StatItem(label = "Sauts totaux", value = String.format("%,d", currentSession.totalJumps), unit = " SAUTS", valueColor = colorPink)
+                                    StatItem(label = "Sauts totaux", value = String.format("%,d", currentSession.totalJumps), unit = " SAUTS", valueColor = colorOrange)
                                 }
                                 Spacer(modifier = Modifier.height(24.dp))
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    StatItem(label = "Sauts / min", value = currentSession.jumpsPerMin.toString(), unit = " /MIN", valueColor = colorPurple)
+                                    StatItem(label = "Sauts / min", value = currentSession.jumpsPerMin.toString(), unit = " /MIN", valueColor = colorBlue)
                                     StatItem(label = "Calories", value = currentSession.kcal.toString(), unit = " KCAL", valueColor = colorCyan)
                                 }
                             }
@@ -171,7 +171,7 @@ fun SessionDetailScreen(
             } else {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = colorPink)
+                        CircularProgressIndicator(color = colorOrange)
                     }
                 }
             }
@@ -211,7 +211,7 @@ fun SessionDetailScreen(
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(
                         text = "Voir tout l'historique",
-                        color = colorPink,
+                        color = colorOrange,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
@@ -252,12 +252,12 @@ fun PastSessionCard(session: SessionData) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(0.70f), horizontalArrangement = Arrangement.SpaceBetween) {
-                    PastStatItem(label = "Durée", value = session.durationStr, valueColor = colorGreen)
-                    PastStatItem(label = "Sauts", value = String.format("%,d", session.totalJumps), valueColor = colorPink)
+                    PastStatItem(label = "Durée", value = session.durationStr, valueColor = colorRed)
+                    PastStatItem(label = "Sauts", value = String.format("%,d", session.totalJumps), valueColor = colorOrange)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(0.70f), horizontalArrangement = Arrangement.SpaceBetween) {
-                    PastStatItem(label = "Sauts/min", value = session.jumpsPerMin.toString(), valueColor = colorPurple)
+                    PastStatItem(label = "Sauts/min", value = session.jumpsPerMin.toString(), valueColor = colorBlue)
                     PastStatItem(label = "Kcal", value = session.kcal.toString(), valueColor = colorCyan)
                 }
             }

@@ -57,7 +57,7 @@ fun TrendsDetailScreen(
         TrendChartCard(
             title = "Sauts",
             data = weeklyTrends,
-            color = Color(0xFFE91E63),
+            color = Color(0xFFFA9E1E),
             valueSelector = { it.jumps }
         )
 
@@ -65,7 +65,7 @@ fun TrendsDetailScreen(
         TrendChartCard(
             title = "Temps d'entraînement (min)",
             data = weeklyTrends,
-            color = Color(0xFF8CE825),
+            color = Color(0xFFFF521E),
             valueSelector = { it.durationMin }
         )
 
@@ -81,7 +81,7 @@ fun TrendsDetailScreen(
         TrendChartCard(
             title = "Cadence moyenne (sauts/min)",
             data = weeklyTrends,
-            color = Color(0xFFBA68C8),
+            color = Color(0xFF3902FF),
             valueSelector = { it.cadence }
         )
 

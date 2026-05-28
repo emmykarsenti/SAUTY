@@ -32,6 +32,7 @@ import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionDetailScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.TrendsDetailScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.WorkoutScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.viewmodel.SautyViewModel
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
@@ -184,6 +185,8 @@ class MainActivity : ComponentActivity() {
 
                         composable("profile") {
                             ProfileScreen(
+                                viewModel = viewModel,
+                                onNavigateBack = { navController.popBackStack() },
                                 onLogout = {
                                     navController.navigate("login") {
                                         popUpTo(0) { inclusive = true }
@@ -212,7 +215,7 @@ class MainActivity : ComponentActivity() {
                             val currentSession = if (isRunning || jumpsCount > 0) {
                                 fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
                                     id = "live",
-                                    date = java.text.SimpleDateFormat("EEE dd MMM", java.util.Locale.FRANCE).format(java.util.Date()),
+                                    date = java.text.SimpleDateFormat("EEE dd MMM", Locale.FRANCE).format(java.util.Date()),
                                     timeRange = "Session en cours",
                                     durationStr = timerString,
                                     totalJumps = jumpsCount,
@@ -232,7 +235,7 @@ class MainActivity : ComponentActivity() {
                                     id = workout.date + workout.timeRange,
                                     date = workout.date,
                                     timeRange = workout.timeRange,
-                                    durationStr = String.format("%02d:%02d", workout.durationSeconds / 60, workout.durationSeconds % 60),
+                                    durationStr = String.format(Locale.FRANCE, "%02d:%02d", workout.durationSeconds / 60, workout.durationSeconds % 60),
                                     totalJumps = workout.jumpsTotal,
                                     jumpsPerMin = workout.avgCadence,
                                     kcal = workout.calories,

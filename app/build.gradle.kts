@@ -6,11 +6,7 @@ plugins {
 
 android {
     namespace = "fr.isen.emmykarsenti.nicolasbetoin.sauty"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "fr.isen.emmykarsenti.nicolasbetoin.sauty"

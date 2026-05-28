@@ -1,5 +1,9 @@
 package fr.isen.emmykarsenti.nicolasbetoin.sauty.viewmodel
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
@@ -21,17 +25,17 @@ import java.util.*
 
 class SautyViewModel : ViewModel() {
 
-    // CONNEXION RÉELLE FIREBASE DATABASE
-    private val database = FirebaseDatabase.getInstance()
-
-    // Référence dynamique qui s'adaptera à l'utilisateur connecté
+    // FIREBASE
+    private val database = FirebaseDatabase.getInstance("https://sauty-ekarsenti-nbetoin-default-rtdb.europe-west1.firebasedatabase.app/")
     private var historyRef: DatabaseReference? = null
+    private var profileRef: DatabaseReference? = null
     private var firebaseListener: ValueEventListener? = null
 
+    // ÉTAT CONNEXION
     private val _connectionStatus = MutableStateFlow("Déconnecté")
     val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
 
-    // ENREGISTREMENT DE L'EXERCICE EN TEMPS RÉEL (FLUX MATÉRIEL STM32)
+    // EXERCICE EN TEMPS RÉEL
     private val _timerString = MutableStateFlow("00:00")
     val timerString: StateFlow<String> = _timerString.asStateFlow()
 
@@ -50,16 +54,20 @@ class SautyViewModel : ViewModel() {
     private var timerJob: Job? = null
     private var timeInSeconds = 0
 
-    // OBJECTIFS JOURNALIERS CONFIGURÉS
-    val targetJumps = 2000
-    val targetMinutes = 30
-    val targetKcal = 300
+    // OBJECTIFS (Synchronisés avec le Dashboard)
+    var userFirstName by mutableStateOf("")
+        private set
+    var targetJumps by mutableIntStateOf(2000)
+        private set
+    var targetMinutes by mutableIntStateOf(30)
+        private set
+    var targetKcal by mutableIntStateOf(300)
+        private set
 
-    // SESSIONS ENREGISTRÉES (Alimenté en temps réel par Firebase !)
+    // DONNÉES HISTORIQUE & TENDANCES
     private val _sessions = MutableStateFlow<List<WorkoutSession>>(emptyList())
     val sessions: StateFlow<List<WorkoutSession>> = _sessions.asStateFlow()
 
-    // DONNÉES HEBDOMADAIRES DES TENDANCES
     private val _weeklyTrends = MutableStateFlow(
         listOf(
             DailyTrendData("lun.", 0f, 0f, 0f, 0f),
@@ -74,51 +82,61 @@ class SautyViewModel : ViewModel() {
     val weeklyTrends: StateFlow<List<DailyTrendData>> = _weeklyTrends.asStateFlow()
 
     init {
-        // Récupération automatique de l'UID de l'utilisateur actuellement connecté sur le téléphone
         val currentUid = FirebaseAuth.getInstance().currentUser?.uid
-
         if (currentUid != null) {
-            // On initialise le chemin Firebase avec son vrai UID unique
             historyRef = database.getReference("users/$currentUid/history")
+            profileRef = database.getReference("users/$currentUid/profil")
             listenToFirebaseHistory()
-        } else {
-            // Fallback temporaire si aucun utilisateur n'est connecté (ex: phase de dev)
-            historyRef = database.getReference("users/invite/history")
-            listenToFirebaseHistory()
+            listenToProfileTargets()
         }
     }
 
-    // ÉCOUTE EN TEMPS RÉEL DE L'HISTORIQUE FIREBASE
+    // RÉCUPÉRATION DES OBJECTIFS DEPUIS LE PROFIL
+    private fun listenToProfileTargets() {
+        profileRef?.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                // Récupération du prénom pour le "Bonjour {Prénom}"
+                userFirstName = snapshot.child("prenom").getValue(String::class.java) ?: ""
+
+                // Récupération des objectifs (déjà existant dans ton code)
+                val objectifs = snapshot.child("objectifs")
+                val jumps = snapshot.child("sauts").getValue(Int::class.java) ?: 2000
+                val minutes = snapshot.child("minutes").getValue(Int::class.java) ?: 30
+                val kcal = snapshot.child("kcal").getValue(Int::class.java) ?: 300
+                updateTargets(jumps, minutes, kcal)
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    // Fonction appelée par le ProfileScreen pour mettre à jour l'UI instantanément
+    fun updateTargets(jumps: Int, minutes: Int, kcal: Int) {
+        targetJumps = jumps
+        targetMinutes = minutes
+        targetKcal = kcal
+    }
+
+    // GESTION HISTORIQUE
     private fun listenToFirebaseHistory() {
         val ref = historyRef ?: return
-
-        // Supprime l'ancien écouteur si la fonction est rappelée
         firebaseListener?.let { ref.removeEventListener(it) }
 
         firebaseListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val tempList = mutableListOf<WorkoutSession>()
                 for (child in snapshot.children) {
-                    val session = child.getValue(WorkoutSession::class.java)
-                    if (session != null) {
-                        tempList.add(session)
-                    }
+                    child.getValue(WorkoutSession::class.java)?.let { tempList.add(it) }
                 }
                 _sessions.value = tempList.reversed()
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                println("Erreur Firebase History: ${error.message}")
-            }
+            override fun onCancelled(error: DatabaseError) {}
         }
-
         ref.addValueEventListener(firebaseListener!!)
     }
 
-    // TRAITEMENT DES TRAMES DE L'EDGE IA PAR COMPORTEMENT
+    // LOGIQUE EXERCICE
     fun updateStatus(message: String) {
         _connectionStatus.value = message
-
         if (_isRunning.value) {
             when {
                 message.contains("SAUT_SIMPLE") || message.contains("JUMP_SIMPLE") -> {
@@ -136,10 +154,6 @@ class SautyViewModel : ViewModel() {
 
     private fun recalculateCalories() {
         _calories.value = (_jumpsCount.value * 0.12).toInt()
-    }
-
-    fun startScanning() {
-        _connectionStatus.value = "Recherche en cours..."
     }
 
     fun toggleWorkout() {
@@ -169,7 +183,6 @@ class SautyViewModel : ViewModel() {
         if (timeInSeconds > 0 || _jumpsCount.value > 0) {
             val currentMin = timeInSeconds / 60f
             val avgCadenceCalculated = if (currentMin > 0) (_jumpsCount.value / currentMin).toInt() else 0
-            val doubleJumpsMinCalculated = if (currentMin > 0) (_doubleJumpsCount.value / currentMin).toInt() else 0
 
             val sdfDate = SimpleDateFormat("EEE dd MMM", Locale.FRANCE)
             val sdfTime = SimpleDateFormat("HH:mm", Locale.FRANCE)
@@ -182,25 +195,17 @@ class SautyViewModel : ViewModel() {
                 jumpsTotal = _jumpsCount.value,
                 doubleJumpsTotal = _doubleJumpsCount.value,
                 calories = _calories.value,
-                avgCadence = avgCadenceCalculated,
-                doubleJumpsMin = doubleJumpsMinCalculated
+                avgCadence = avgCadenceCalculated
             )
 
-            // --- SAUVEGARDE RÉELLE DANS LE DOSSIER DE L'UTILISATEUR ACTIF ---
-            historyRef?.let { ref ->
-                val key = ref.push().key
-                if (key != null) {
-                    ref.child(key).setValue(newSession)
-                }
-            }
+            historyRef?.push()?.setValue(newSession)
 
-            // Détermination du jour actuel (ex: "lun.", "mar.")
+            // Mise à jour locale des tendances (courbes)
             val dayFormat = SimpleDateFormat("EEE", Locale.FRANCE)
-            val currentDayLabel = dayFormat.format(currentDate).replace(".", "") + "."
+            val currentDayLabel = dayFormat.format(currentDate).lowercase().replace(".", "") + "."
 
-            // Mise à jour des courbes
             _weeklyTrends.value = _weeklyTrends.value.map {
-                if (it.dayLabel.equals(currentDayLabel, ignoreCase = true) || it.dayLabel == "jeu.") {
+                if (it.dayLabel.equals(currentDayLabel, ignoreCase = true)) {
                     DailyTrendData(
                         dayLabel = it.dayLabel,
                         jumps = it.jumps + _jumpsCount.value.toFloat(),
@@ -212,7 +217,7 @@ class SautyViewModel : ViewModel() {
             }
         }
 
-        // Remise à zéro
+        // Reset
         timeInSeconds = 0
         _jumpsCount.value = 0
         _doubleJumpsCount.value = 0
@@ -223,6 +228,10 @@ class SautyViewModel : ViewModel() {
     private fun updateTimerDisplay() {
         val minutes = timeInSeconds / 60
         val seconds = timeInSeconds % 60
-        _timerString.value = String.format("%02d:%02d", minutes, seconds)
+        _timerString.value = String.format(Locale.FRANCE, "%02d:%02d", minutes, seconds)
+    }
+
+    fun startScanning() {
+        _connectionStatus.value = "Recherche en cours..."
     }
 }

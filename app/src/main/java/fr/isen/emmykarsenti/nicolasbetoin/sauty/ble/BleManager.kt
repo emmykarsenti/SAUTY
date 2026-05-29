@@ -13,23 +13,19 @@ import java.util.UUID
 @SuppressLint("MissingPermission")
 class BleManager(private val context: Context) {
 
-    private val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
     private val bleScanner = bluetoothAdapter?.bluetoothLeScanner
-
     private val sharedPreferences = context.getSharedPreferences("SautyPrefs", Context.MODE_PRIVATE)
-    private var bluetoothGatt: BluetoothGatt? = null
 
-    // Callbacks pour l'interface utilisateur
+    private var bluetoothGatt: BluetoothGatt? = null
     var onStatusMessage: ((String) -> Unit)? = null
 
-    // CONFIGURATION UUID (Doit correspondre au .ioc du STM32)
     private val SERVICE_UUID = UUID.fromString("00000000-cc7a-482a-984a-7f2ed5b3e58f")
     private val JUMPS_CHAR_UUID = UUID.fromString("00000000-8e22-4541-9d4c-21edae82ed19")
     private val CALORIES_CHAR_UUID = UUID.fromString("00000000-8e22-4541-9d4c-21edae82ed20")
     private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-    // ÉTATS OBSERVABLES (UI)
     private val _foundDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
     val foundDevices: StateFlow<List<BluetoothDevice>> = _foundDevices
 
@@ -42,20 +38,13 @@ class BleManager(private val context: Context) {
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
 
-    // 1. GESTION DU SCAN
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val device = result.device
-            val deviceName = device.name ?: "Inconnu"
-
-            // On filtre pour n'afficher que les appareils de ton projet
-            if (deviceName.contains("SAUTY", ignoreCase = true)) {
-                val currentList = _foundDevices.value.toMutableList()
-                if (!currentList.any { it.address == device.address }) {
-                    currentList.add(device)
-                    _foundDevices.value = currentList
-                    Log.d("SAUTY_SCAN", "Appareil trouvé : $deviceName (${device.address})")
-                }
+            val currentList = _foundDevices.value.toMutableList()
+            if (!currentList.any { it.address == device.address }) {
+                currentList.add(device)
+                _foundDevices.value = currentList
             }
         }
     }
@@ -65,97 +54,86 @@ class BleManager(private val context: Context) {
             onStatusMessage?.invoke("Activez le Bluetooth")
             return
         }
-        _foundDevices.value = emptyList() // Reset de la liste
-        onStatusMessage?.invoke("Recherche de bracelets...")
+        _foundDevices.value = emptyList()
+        onStatusMessage?.invoke("Recherche d'appareils...")
         bleScanner?.startScan(scanCallback)
     }
 
-    fun stopScan() {
+    fun connectToDevice(device: BluetoothDevice, autoConnect: Boolean) {
         bleScanner?.stopScan(scanCallback)
-    }
-
-    // 2. CONNEXION ET MÉMORISATION
-    fun connectToDevice(device: BluetoothDevice) {
-        stopScan()
-        onStatusMessage?.invoke("Connexion à ${device.name ?: "Bracelet"}...")
-
-        // MÉMORISATION : On sauvegarde l'adresse MAC pour la prochaine fois
-        sharedPreferences.edit().putString("MAC_ADDRESS", device.address).apply()
-
+        if (autoConnect) {
+            sharedPreferences.edit().putString("MAC_ADDRESS", device.address).apply()
+        }
         bluetoothGatt = device.connectGatt(context, false, gattCallback)
     }
 
-    // AUTO-CONNEXION (Le mode "Apple")
-    fun tryAutoConnect(): Boolean {
-        val savedMacAddress = sharedPreferences.getString("MAC_ADDRESS", null)
-        if (savedMacAddress != null && bluetoothAdapter?.isEnabled == true) {
-            try {
-                val device = bluetoothAdapter.getRemoteDevice(savedMacAddress)
-                onStatusMessage?.invoke("Reconnexion automatique...")
-                // autoConnect = true permet au téléphone de se connecter dès que la carte est à portée
-                bluetoothGatt = device.connectGatt(context, true, gattCallback)
-                return true
-            } catch (e: Exception) {
-                Log.e("SAUTY_BLE", "Erreur AutoConnect", e)
-            }
+    fun tryAutoConnect() {
+        val savedMac = sharedPreferences.getString("MAC_ADDRESS", null)
+        if (savedMac != null && bluetoothAdapter?.isEnabled == true) {
+            onStatusMessage?.invoke("Reconnexion automatique...")
+            val device = bluetoothAdapter.getRemoteDevice(savedMac)
+            // On utilise autoConnect = true ici pour que le système se connecte dès que le bracelet est en vue
+            bluetoothGatt = device.connectGatt(context, true, gattCallback)
         }
-        return false
     }
 
-    // 3. CALLBACKS GATT (COMMUNICATION)
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 _isConnected.value = true
-                onStatusMessage?.invoke("Connecté !")
+                onStatusMessage?.invoke("Connecté au SAUTY !")
                 gatt.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 _isConnected.value = false
-                onStatusMessage?.invoke("Déconnecté")
-                gatt.close()
+                onStatusMessage?.invoke("Bracelet déconnecté")
+                // Si on a une adresse sauvegardée, on ne ferme pas le gatt pour permettre la reconnexion auto
+                if (sharedPreferences.getString("MAC_ADDRESS", null) == null) {
+                    gatt.close()
+                }
             }
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                enableNotifications(gatt)
-            }
+            if (status == BluetoothGatt.GATT_SUCCESS) enableNotifications(gatt)
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
-            val decodedValue = decodeUint16(value)
-            when (characteristic.uuid) {
-                JUMPS_CHAR_UUID -> _jumpsState.value = decodedValue
-                CALORIES_CHAR_UUID -> _caloriesState.value = decodedValue
-            }
+            processData(characteristic.uuid, value)
+        }
+
+        @Deprecated("Deprecated for Android 13+")
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+            processData(characteristic.uuid, characteristic.value)
+        }
+    }
+
+    private fun processData(uuid: UUID, value: ByteArray?) {
+        if (value == null || value.isEmpty()) return
+
+        // Dès que l'IA du STM32 envoie QUOI QUE CE SOIT sur la caractéristique des sauts :
+        if (uuid == JUMPS_CHAR_UUID) {
+            // On envoie un code secret au ViewModel pour déclencher le compteur
+            onStatusMessage?.invoke("ACTION_JUMP")
         }
     }
 
     private fun enableNotifications(gatt: BluetoothGatt) {
         val service = gatt.getService(SERVICE_UUID) ?: return
+        val chars = listOf(JUMPS_CHAR_UUID, CALORIES_CHAR_UUID)
 
-        // Liste des caractéristiques à écouter
-        val characteristics = listOf(JUMPS_CHAR_UUID, CALORIES_CHAR_UUID)
-
-        characteristics.forEach { uuid ->
-            val char = service.getCharacteristic(uuid)
-            if (char != null) {
-                gatt.setCharacteristicNotification(char, true)
-                val descriptor = char.getDescriptor(CCCD_UUID)
-                if (descriptor != null) {
-                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    gatt.writeDescriptor(descriptor)
-                    Thread.sleep(100)
+        Thread {
+            chars.forEach { uuid ->
+                service.getCharacteristic(uuid)?.let { char ->
+                    gatt.setCharacteristicNotification(char, true)
+                    char.getDescriptor(CCCD_UUID)?.let { desc ->
+                        desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                        gatt.writeDescriptor(desc)
+                        Thread.sleep(300)
+                    }
                 }
             }
-        }
-    }
-
-    // 4. UTILITAIRES
-    private fun decodeUint16(bytes: ByteArray): Int {
-        if (bytes.size < 2) return 0
-        // Little-endian : le premier octet est le poids faible
-        return (bytes[1].toInt() and 0xFF shl 8) or (bytes[0].toInt() and 0xFF)
+            onStatusMessage?.invoke("Données synchronisées")
+        }.start()
     }
 
     fun disconnectAndForget() {

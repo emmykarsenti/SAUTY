@@ -1,13 +1,22 @@
 package fr.isen.emmykarsenti.nicolasbetoin.sauty
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Home
@@ -16,7 +25,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -61,9 +75,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: SautyViewModel = viewModel()
 
+            // --- PONT DE DONNÉES ENTRE BLE ET VIEWMODEL ---
             bleManager.onStatusMessage = { message ->
                 viewModel.updateStatus(message)
             }
+
+            val bleJumps by bleManager.jumpsState.collectAsState()
+            val bleCalories by bleManager.caloriesState.collectAsState()
+
+            LaunchedEffect(bleJumps, bleCalories) {
+                //viewModel.updateFromBle(bleJumps, bleCalories)
+            }
+            // ----------------------------------------------
 
             MaterialTheme(colorScheme = darkColorScheme()) {
                 val navController = rememberNavController()
@@ -177,6 +200,7 @@ class MainActivity : ComponentActivity() {
 
                         composable("scan") {
                             SautyScanScreen(
+                                bleManager = bleManager,
                                 onStartScanClick = { bleManager.startScan() },
                                 onDisconnectClick = { bleManager.disconnectAndForget() },
                                 viewModel = viewModel
@@ -202,16 +226,12 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("sessionDetail") {
-                            // 1. On récupère les données brutes de l'exercice en cours (STM32 Edge IA)
                             val timerString by viewModel.timerString.collectAsState()
                             val jumpsCount by viewModel.jumpsCount.collectAsState()
                             val calories by viewModel.calories.collectAsState()
                             val isRunning by viewModel.isRunning.collectAsState()
-
-                            // 2. On récupère la liste de l'historique provenant de Firebase
                             val firebaseSessions by viewModel.sessions.collectAsState()
 
-                            // 3. Objet dynamique connecté aux données du STM32 pour l'exercice Actuel
                             val currentSession = if (isRunning || jumpsCount > 0) {
                                 fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
                                     id = "live",
@@ -219,17 +239,16 @@ class MainActivity : ComponentActivity() {
                                     timeRange = "Session en cours",
                                     durationStr = timerString,
                                     totalJumps = jumpsCount,
-                                    jumpsPerMin = 0, // Sera calculé à la fin, ou laisse à 0 pendant le live
+                                    jumpsPerMin = 0,
                                     kcal = calories,
                                     jumpsProgress = jumpsCount.toFloat() / viewModel.targetJumps,
-                                    timeProgress = 0f, // Progression gérée dynamiquement si tu le souhaites
+                                    timeProgress = 0f,
                                     kcalProgress = calories.toFloat() / viewModel.targetKcal
                                 )
                             } else {
-                                null // S'il n'y a pas d'exercice en cours, l'UI affichera l'indicateur de chargement ou un état vide
+                                null
                             }
 
-                            // 4. On convertit l'historique Firebase (WorkoutSession) vers le modèle d'affichage (SessionData)
                             val pastSessions = firebaseSessions.map { workout ->
                                 fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
                                     id = workout.date + workout.timeRange,
@@ -245,7 +264,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            // 5. On envoie le tout à l'écran qui conserve sa sublime esthétique !
                             SessionDetailScreen(
                                 currentSession = currentSession,
                                 pastSessions = pastSessions,
@@ -268,47 +286,170 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Écran de Scan qui affiche la liste de tous les périphériques Bluetooth détectés.
+ */
+@SuppressLint("MissingPermission")
 @Composable
 fun SautyScanScreen(
+    bleManager: BleManager,
     onStartScanClick: () -> Unit,
     onDisconnectClick: () -> Unit,
     viewModel: SautyViewModel = viewModel()
 ) {
     val statusText by viewModel.connectionStatus.collectAsState()
+    val scannedDevices by bleManager.foundDevices.collectAsState()
+
+    var showDialog by remember { mutableStateOf(false) }
+    var selectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
+    var autoConnectChecked by remember { mutableStateOf(true) }
 
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Bracelet SAUTY",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
+
+        Box(
+            modifier = Modifier.size(100.dp).clip(CircleShape).background(Color.White).padding(4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.logo_sauty),
+                contentDescription = "Logo Sauty",
+                modifier = Modifier.size(90.dp).clip(CircleShape)
+            )
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = statusText,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.secondary
+            text = "SAUTY CONNECT",
+            color = Color(0xFFFA9E1E),
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
         )
-        Spacer(modifier = Modifier.height(32.dp))
+        Text(text = statusText, color = Color.Gray)
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Button(onClick = {
-                viewModel.startScanning()
-                onStartScanClick()
-            }) {
-                Text(text = "SCANNER", style = MaterialTheme.typography.titleMedium)
+            Button(
+                onClick = {
+                    viewModel.startScanning()
+                    onStartScanClick()
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF521E))
+            ) {
+                Text("SCANNER")
             }
             Button(
                 onClick = { onDisconnectClick() },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))
             ) {
-                Text(text = "OUBLIER", style = MaterialTheme.typography.titleMedium)
+                Text("OUBLIER")
             }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(scannedDevices) { device ->
+                DeviceItemSecure(
+                    device = device,
+                    onClick = {
+                        selectedDevice = device
+                        showDialog = true
+                    }
+                )
+            }
+        }
+    }
+
+    if (showDialog && selectedDevice != null) {
+        val safeName = try { selectedDevice?.name ?: "Appareil Inconnu" } catch (e: Exception) { "Inconnu" }
+
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Connexion au bracelet", color = Color.White) },
+            text = {
+                Column {
+                    Text(
+                        text = "Voulez-vous connecter : $safeName ?",
+                        color = Color.LightGray
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { autoConnectChecked = !autoConnectChecked }
+                    ) {
+                        Checkbox(
+                            checked = autoConnectChecked,
+                            onCheckedChange = { autoConnectChecked = it },
+                            colors = CheckboxDefaults.colors(
+                                checkmarkColor = Color.Black,
+                                checkedColor = Color(0xFFFA9E1E),
+                                uncheckedColor = Color.Gray
+                            )
+                        )
+                        Text("Connexion automatique", color = Color.White)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDialog = false
+                        selectedDevice?.let {
+                            bleManager.connectToDevice(it, autoConnectChecked)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFA9E1E))
+                ) {
+                    Text("SE CONNECTER")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("ANNULER", color = Color.Gray)
+                }
+            },
+            containerColor = Color(0xFF1E1E1E)
+        )
+    }
+}
+
+@Composable
+fun DeviceItemSecure(device: android.bluetooth.BluetoothDevice, onClick: () -> Unit) {
+    val safeName = remember(device) {
+        try {
+            device.name ?: "Appareil inconnu"
+        } catch (e: SecurityException) {
+            "Accès refusé (Permission)"
+        } catch (e: Exception) {
+            "Erreur lecture nom"
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = safeName, color = Color.White, fontWeight = FontWeight.Bold)
+            Text(text = device.address, color = Color.Gray, fontSize = 12.sp)
         }
     }
 }

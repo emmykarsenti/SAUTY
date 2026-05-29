@@ -7,11 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.*
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.model.DailyTrendData
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.model.WorkoutSession
 import kotlinx.coroutines.Job
@@ -25,17 +21,14 @@ import java.util.*
 
 class SautyViewModel : ViewModel() {
 
-    // FIREBASE
     private val database = FirebaseDatabase.getInstance("https://sauty-ekarsenti-nbetoin-default-rtdb.europe-west1.firebasedatabase.app/")
     private var historyRef: DatabaseReference? = null
     private var profileRef: DatabaseReference? = null
     private var firebaseListener: ValueEventListener? = null
 
-    // ÉTAT CONNEXION
     private val _connectionStatus = MutableStateFlow("Déconnecté")
     val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
 
-    // EXERCICE EN TEMPS RÉEL
     private val _timerString = MutableStateFlow("00:00")
     val timerString: StateFlow<String> = _timerString.asStateFlow()
 
@@ -54,17 +47,14 @@ class SautyViewModel : ViewModel() {
     private var timerJob: Job? = null
     private var timeInSeconds = 0
 
-    // OBJECTIFS (Synchronisés avec le Dashboard)
-    var userFirstName by mutableStateOf("")
-        private set
-    var targetJumps by mutableIntStateOf(2000)
-        private set
-    var targetMinutes by mutableIntStateOf(30)
-        private set
-    var targetKcal by mutableIntStateOf(300)
-        private set
+    private var initialJumpsOffset = -1
+    private var initialCalOffset = -1
 
-    // DONNÉES HISTORIQUE & TENDANCES
+    var userFirstName by mutableStateOf("")
+    var targetJumps by mutableIntStateOf(2000)
+    var targetMinutes by mutableIntStateOf(30)
+    var targetKcal by mutableIntStateOf(300)
+
     private val _sessions = MutableStateFlow<List<WorkoutSession>>(emptyList())
     val sessions: StateFlow<List<WorkoutSession>> = _sessions.asStateFlow()
 
@@ -91,37 +81,32 @@ class SautyViewModel : ViewModel() {
         }
     }
 
-    // RÉCUPÉRATION DES OBJECTIFS DEPUIS LE PROFIL
     private fun listenToProfileTargets() {
         profileRef?.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                // Récupération du prénom pour le "Bonjour {Prénom}"
                 userFirstName = snapshot.child("prenom").getValue(String::class.java) ?: ""
 
-                // Récupération des objectifs (déjà existant dans ton code)
+                // On descend dans le sous-dossier "objectifs" que tu as créé dans RegisterScreen
                 val objectifs = snapshot.child("objectifs")
-                val jumps = snapshot.child("sauts").getValue(Int::class.java) ?: 2000
-                val minutes = snapshot.child("minutes").getValue(Int::class.java) ?: 30
-                val kcal = snapshot.child("kcal").getValue(Int::class.java) ?: 300
-                updateTargets(jumps, minutes, kcal)
+
+                updateTargets(
+                    jumps = objectifs.child("sauts").getValue(Int::class.java) ?: 2000,
+                    minutes = objectifs.child("minutes").getValue(Int::class.java) ?: 30,
+                    kcal = objectifs.child("kcal").getValue(Int::class.java) ?: 300
+                )
             }
             override fun onCancelled(error: DatabaseError) {}
         })
     }
 
-    // Fonction appelée par le ProfileScreen pour mettre à jour l'UI instantanément
     fun updateTargets(jumps: Int, minutes: Int, kcal: Int) {
         targetJumps = jumps
         targetMinutes = minutes
         targetKcal = kcal
     }
 
-    // GESTION HISTORIQUE
     private fun listenToFirebaseHistory() {
-        val ref = historyRef ?: return
-        firebaseListener?.let { ref.removeEventListener(it) }
-
-        firebaseListener = object : ValueEventListener {
+        historyRef?.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val tempList = mutableListOf<WorkoutSession>()
                 for (child in snapshot.children) {
@@ -130,30 +115,36 @@ class SautyViewModel : ViewModel() {
                 _sessions.value = tempList.reversed()
             }
             override fun onCancelled(error: DatabaseError) {}
-        }
-        ref.addValueEventListener(firebaseListener!!)
+        })
     }
 
-    // LOGIQUE EXERCICE
-    fun updateStatus(message: String) {
-        _connectionStatus.value = message
+    // --- MISE À JOUR DEPUIS LE BLE ---
+    fun updateFromBle(jumpsFromDevice: Int, caloriesFromDevice: Int) {
         if (_isRunning.value) {
-            when {
-                message.contains("SAUT_SIMPLE") || message.contains("JUMP_SIMPLE") -> {
-                    _jumpsCount.value += 1
-                    recalculateCalories()
-                }
-                message.contains("SAUT_DOUBLE") || message.contains("JUMP_DOUBLE") -> {
-                    _jumpsCount.value += 1
-                    _doubleJumpsCount.value += 1
-                    recalculateCalories()
-                }
+            if (initialJumpsOffset == -1) {
+                initialJumpsOffset = jumpsFromDevice
+                initialCalOffset = caloriesFromDevice
             }
+            _jumpsCount.value = maxOf(0, jumpsFromDevice - initialJumpsOffset)
+            _calories.value = maxOf(0, caloriesFromDevice - initialCalOffset)
         }
     }
 
-    private fun recalculateCalories() {
-        _calories.value = (_jumpsCount.value * 0.12).toInt()
+    fun updateStatus(message: String) {
+        // On nettoie les caractères invisibles (retours à la ligne de la STM32)
+        val cleanMessage = message.trim()
+
+        // On vérifie si le message CONTIENT le mot clé (insensible à la casse)
+        if (cleanMessage.contains("ACTION_JUMP", ignoreCase = true)) {
+            // On vérifie que le chrono tourne
+            if (_isRunning.value) {
+                _jumpsCount.value += 1
+                _calories.value = (_jumpsCount.value * 0.12).toInt()
+            }
+        } else {
+            // Sinon, c'est un message système (Connecté, etc.)
+            _connectionStatus.value = cleanMessage
+        }
     }
 
     fun toggleWorkout() {
@@ -162,6 +153,8 @@ class SautyViewModel : ViewModel() {
 
     private fun startWorkout() {
         _isRunning.value = true
+        initialJumpsOffset = -1
+        initialCalOffset = -1
         timerJob = viewModelScope.launch {
             while (true) {
                 delay(1000L)
@@ -179,56 +172,45 @@ class SautyViewModel : ViewModel() {
     fun stopWorkout() {
         _isRunning.value = false
         timerJob?.cancel()
-
         if (timeInSeconds > 0 || _jumpsCount.value > 0) {
-            val currentMin = timeInSeconds / 60f
-            val avgCadenceCalculated = if (currentMin > 0) (_jumpsCount.value / currentMin).toInt() else 0
-
-            val sdfDate = SimpleDateFormat("EEE dd MMM", Locale.FRANCE)
-            val sdfTime = SimpleDateFormat("HH:mm", Locale.FRANCE)
-            val currentDate = Date()
-
-            val newSession = WorkoutSession(
-                date = sdfDate.format(currentDate),
-                timeRange = sdfTime.format(currentDate),
-                durationSeconds = timeInSeconds,
-                jumpsTotal = _jumpsCount.value,
-                doubleJumpsTotal = _doubleJumpsCount.value,
-                calories = _calories.value,
-                avgCadence = avgCadenceCalculated
-            )
-
-            historyRef?.push()?.setValue(newSession)
-
-            // Mise à jour locale des tendances (courbes)
-            val dayFormat = SimpleDateFormat("EEE", Locale.FRANCE)
-            val currentDayLabel = dayFormat.format(currentDate).lowercase().replace(".", "") + "."
-
-            _weeklyTrends.value = _weeklyTrends.value.map {
-                if (it.dayLabel.equals(currentDayLabel, ignoreCase = true)) {
-                    DailyTrendData(
-                        dayLabel = it.dayLabel,
-                        jumps = it.jumps + _jumpsCount.value.toFloat(),
-                        durationMin = it.durationMin + currentMin,
-                        kcal = it.kcal + _calories.value.toFloat(),
-                        cadence = if (it.cadence == 0f) avgCadenceCalculated.toFloat() else (it.cadence + avgCadenceCalculated) / 2f
-                    )
-                } else it
-            }
+            saveSessionToFirebase()
         }
+        resetStats()
+    }
 
-        // Reset
+    private fun saveSessionToFirebase() {
+        val currentMin = timeInSeconds / 60f
+        val avgCadence = if (currentMin > 0) (_jumpsCount.value / currentMin).toInt() else 0
+        val sdfDate = SimpleDateFormat("EEE dd MMM", Locale.FRANCE)
+        val sdfTime = SimpleDateFormat("HH:mm", Locale.FRANCE)
+        val now = Date()
+
+        val session = WorkoutSession(
+            date = sdfDate.format(now),
+            timeRange = sdfTime.format(now),
+            durationSeconds = timeInSeconds,
+            jumpsTotal = _jumpsCount.value,
+            doubleJumpsTotal = _doubleJumpsCount.value,
+            calories = _calories.value,
+            avgCadence = avgCadence
+        )
+        historyRef?.push()?.setValue(session)
+    }
+
+    private fun resetStats() {
         timeInSeconds = 0
         _jumpsCount.value = 0
         _doubleJumpsCount.value = 0
         _calories.value = 0
+        initialJumpsOffset = -1
+        initialCalOffset = -1
         updateTimerDisplay()
     }
 
     private fun updateTimerDisplay() {
-        val minutes = timeInSeconds / 60
-        val seconds = timeInSeconds % 60
-        _timerString.value = String.format(Locale.FRANCE, "%02d:%02d", minutes, seconds)
+        val mins = timeInSeconds / 60
+        val secs = timeInSeconds % 60
+        _timerString.value = String.format(Locale.FRANCE, "%02d:%02d", mins, secs)
     }
 
     fun startScanning() {

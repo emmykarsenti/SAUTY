@@ -72,7 +72,6 @@ class BleManager(private val context: Context) {
         if (savedMac != null && bluetoothAdapter?.isEnabled == true) {
             onStatusMessage?.invoke("Reconnexion automatique...")
             val device = bluetoothAdapter.getRemoteDevice(savedMac)
-            // On utilise autoConnect = true ici pour que le système se connecte dès que le bracelet est en vue
             bluetoothGatt = device.connectGatt(context, true, gattCallback)
         }
     }
@@ -81,12 +80,15 @@ class BleManager(private val context: Context) {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 _isConnected.value = true
-                onStatusMessage?.invoke("Connecté au SAUTY !")
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    onStatusMessage?.invoke("Connecté au SAUTY !")
+                }
                 gatt.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 _isConnected.value = false
-                onStatusMessage?.invoke("Bracelet déconnecté")
-                // Si on a une adresse sauvegardée, on ne ferme pas le gatt pour permettre la reconnexion auto
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    onStatusMessage?.invoke("Bracelet déconnecté")
+                }
                 if (sharedPreferences.getString("MAC_ADDRESS", null) == null) {
                     gatt.close()
                 }
@@ -109,11 +111,10 @@ class BleManager(private val context: Context) {
 
     private fun processData(uuid: UUID, value: ByteArray?) {
         if (value == null || value.isEmpty()) return
-
-        // Dès que l'IA du STM32 envoie QUOI QUE CE SOIT sur la caractéristique des sauts :
         if (uuid == JUMPS_CHAR_UUID) {
-            // On envoie un code secret au ViewModel pour déclencher le compteur
-            onStatusMessage?.invoke("ACTION_JUMP")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                onStatusMessage?.invoke("ACTION_JUMP")
+            }
         }
     }
 
@@ -132,7 +133,9 @@ class BleManager(private val context: Context) {
                     }
                 }
             }
-            onStatusMessage?.invoke("Données synchronisées")
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                onStatusMessage?.invoke("Données synchronisées")
+            }
         }.start()
     }
 

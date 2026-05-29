@@ -76,15 +76,10 @@ class MainActivity : ComponentActivity() {
             val viewModel: SautyViewModel = viewModel()
 
             // --- PONT DE DONNÉES ENTRE BLE ET VIEWMODEL ---
-            bleManager.onStatusMessage = { message ->
-                viewModel.updateStatus(message)
-            }
-
-            val bleJumps by bleManager.jumpsState.collectAsState()
-            val bleCalories by bleManager.caloriesState.collectAsState()
-
-            LaunchedEffect(bleJumps, bleCalories) {
-                //viewModel.updateFromBle(bleJumps, bleCalories)
+            LaunchedEffect(Unit) {
+                bleManager.onStatusMessage = { message ->
+                    viewModel.updateStatus(message)
+                }
             }
             // ----------------------------------------------
 
@@ -286,9 +281,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/**
- * Écran de Scan qui affiche la liste de tous les périphériques Bluetooth détectés.
- */
 @SuppressLint("MissingPermission")
 @Composable
 fun SautyScanScreen(
@@ -311,15 +303,20 @@ fun SautyScanScreen(
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
         Box(
-            modifier = Modifier.size(100.dp).clip(CircleShape).background(Color.White).padding(4.dp),
+            modifier = Modifier
+                .size(100.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .padding(4.dp),
             contentAlignment = Alignment.Center
         ) {
             Image(
                 painter = painterResource(id = R.drawable.logo_sauty),
                 contentDescription = "Logo Sauty",
-                modifier = Modifier.size(90.dp).clip(CircleShape)
+                modifier = Modifier
+                    .size(90.dp)
+                    .clip(CircleShape)
             )
         }
 
@@ -376,7 +373,11 @@ fun SautyScanScreen(
     }
 
     if (showDialog && selectedDevice != null) {
-        val safeName = try { selectedDevice?.name ?: "Appareil Inconnu" } catch (e: Exception) { "Inconnu" }
+        val safeName = try {
+            selectedDevice?.name ?: "Appareil Inconnu"
+        } catch (e: Exception) {
+            "Inconnu"
+        }
 
         AlertDialog(
             onDismissRequest = { showDialog = false },

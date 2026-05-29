@@ -44,7 +44,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
-    viewModel: SautyViewModel, // Ajout du ViewModel pour synchroniser les anneaux
+    viewModel: SautyViewModel,
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -54,7 +54,6 @@ fun ProfileScreen(
     val database = FirebaseDatabase.getInstance("https://sauty-ekarsenti-nbetoin-default-rtdb.europe-west1.firebasedatabase.app/")
     val userRef = user?.uid?.let { database.getReference("users").child(it).child("profil") }
 
-    // ÉTATS
     var isEditing by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var newEmail by remember { mutableStateOf(auth.currentUser?.email ?: "") }
@@ -66,14 +65,11 @@ fun ProfileScreen(
     var dateNaissance by remember { mutableStateOf("") }
     var poids by remember { mutableStateOf("") }
     var taille by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
 
-    // Objectifs
     var sautsObjectif by remember { mutableStateOf(viewModel.targetJumps.toString()) }
     var tempsObjectif by remember { mutableStateOf(viewModel.targetMinutes.toString()) }
     var kcalObjectif by remember { mutableStateOf(viewModel.targetKcal.toString()) }
 
-    // Photo
     var showDialog by remember { mutableStateOf(false) }
     var photoUri by remember { mutableStateOf<Uri?>(null) }
     var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -85,7 +81,6 @@ fun ProfileScreen(
         if (bitmap != null) { photoBitmap = bitmap; photoUri = null }
     }
 
-    // CHARGEMENT DEPUIS FIREBASE
     LaunchedEffect(Unit) {
         userRef?.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -115,7 +110,9 @@ fun ProfileScreen(
             TopAppBar(
                 title = { Text("Mon Profil", color = Color.White) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, "Retour", tint = Color.White) }
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, "Retour", tint = Color.White)
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
             )
@@ -123,7 +120,9 @@ fun ProfileScreen(
         containerColor = Color.Black
     ) { paddingValues ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFFFA9E1E)) }
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color(0xFFFA9E1E))
+            }
         } else {
             Column(
                 modifier = Modifier
@@ -143,16 +142,36 @@ fun ProfileScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     if (photoUri != null) {
-                        AsyncImage(model = photoUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        AsyncImage(
+                            model = photoUri,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     } else if (photoBitmap != null) {
-                        Image(bitmap = photoBitmap!!.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        Image(
+                            bitmap = photoBitmap!!.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     } else {
-                        Icon(imageVector = Icons.Default.Person, contentDescription = null, modifier = Modifier.size(60.dp), tint = Color.Gray)
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(60.dp),
+                            tint = Color.Gray
+                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(if (identifiant.isNotEmpty()) identifiant else "Utilisateur", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (identifiant.isNotEmpty()) identifiant else "Utilisateur",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
                 Text(email, color = Color.Gray, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(32.dp))
 
@@ -166,19 +185,28 @@ fun ProfileScreen(
                     Text("Mes Objectifs", color = Color(0xFFFA9E1E), fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    ProfileInfoRow("Sauts", "$sautsObjectif")
+                    ProfileInfoRow("Sauts", sautsObjectif)
                     ProfileInfoRow("Temps", "$tempsObjectif min")
                     ProfileInfoRow("Calories", "$kcalObjectif kcal")
 
                     Spacer(modifier = Modifier.height(40.dp))
 
-                    Button(onClick = { isEditing = true }, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFA9E1E))) {
+                    Button(
+                        onClick = { isEditing = true },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFA9E1E))
+                    ) {
                         Text("MODIFIER LE PROFIL", color = Color.Black, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = { auth.signOut(); onLogout() }, modifier = Modifier.fillMaxWidth().height(50.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF521E))) {
+                    Button(
+                        onClick = { auth.signOut(); onLogout() },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF521E))
+                    ) {
                         Text("SE DÉCONNECTER", color = Color.White, fontWeight = FontWeight.Bold)
                     }
+
                 } else {
                     // MODE ÉDITION
                     OutlinedTextField(
@@ -188,16 +216,18 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = prenom, onValueChange = { prenom = it }, label = { Text("Prénom") }, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = nom, onValueChange = { nom = it }, label = { Text("Nom") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(
+                        value = prenom,
+                        onValueChange = { prenom = it },
+                        label = { Text("Prénom") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
-                        value = newEmail,
-                        onValueChange = { newEmail = it },
-                        label = { Text("Adresse Email") },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                        value = nom,
+                        onValueChange = { nom = it },
+                        label = { Text("Nom") },
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
@@ -226,37 +256,82 @@ fun ProfileScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(value = poids, onValueChange = { poids = it }, label = { Text("Poids (kg)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
-                        OutlinedTextField(value = taille, onValueChange = { taille = it }, label = { Text("Taille (cm)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = poids,
+                            onValueChange = { poids = it },
+                            label = { Text("Poids (kg)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = taille,
+                            onValueChange = { taille = it },
+                            label = { Text("Taille (cm)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
-                    Text("Objectifs Quotidiens", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(value = sautsObjectif, onValueChange = { sautsObjectif = it }, label = { Text("Sauts") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
-                        OutlinedTextField(value = tempsObjectif, onValueChange = { tempsObjectif = it }, label = { Text("Min") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
-                        OutlinedTextField(value = kcalObjectif, onValueChange = { kcalObjectif = it }, label = { Text("Kcal") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
+                    Text(
+                        "Objectifs Quotidiens",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.Start)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = sautsObjectif,
+                            onValueChange = { sautsObjectif = it },
+                            label = { Text("Sauts") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = tempsObjectif,
+                            onValueChange = { tempsObjectif = it },
+                            label = { Text("Min") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = kcalObjectif,
+                            onValueChange = { kcalObjectif = it },
+                            label = { Text("Kcal") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        OutlinedButton(onClick = { isEditing = false }, modifier = Modifier.weight(1f).height(50.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { isEditing = false },
+                            modifier = Modifier.weight(1f).height(50.dp)
+                        ) {
                             Text("ANNULER", color = Color.White)
                         }
                         Button(
                             onClick = {
-                                // SAUVEGARDE FIREBASE
-                                val user = auth.currentUser
-                                // Mise à jour de l'Email dans Firebase Auth
-                                if (newEmail != user?.email && newEmail.isNotEmpty()) {
-                                    user?.updateEmail(newEmail)?.addOnFailureListener {
+                                val currentUser = auth.currentUser
+                                if (newEmail != currentUser?.email && newEmail.isNotEmpty()) {
+                                    currentUser?.updateEmail(newEmail)?.addOnFailureListener {
                                         Toast.makeText(context, "Erreur Email : Ré-authentification requise", Toast.LENGTH_LONG).show()
                                     }
                                 }
-                                // Mise à jour du Mot de passe dans Firebase Auth
                                 if (newPassword.isNotEmpty()) {
-                                    user?.updatePassword(newPassword)?.addOnFailureListener {
+                                    currentUser?.updatePassword(newPassword)?.addOnFailureListener {
                                         Toast.makeText(context, "Erreur MDP : Ré-authentification requise", Toast.LENGTH_LONG).show()
                                     }
                                 }
@@ -272,7 +347,6 @@ fun ProfileScreen(
                                     "objectifs/kcal" to (kcalObjectif.toIntOrNull() ?: 300)
                                 )
                                 userRef?.updateChildren(updates)?.addOnSuccessListener {
-                                    // MISE À JOUR DU VIEWMODEL POUR LES ANNEAUX
                                     viewModel.updateTargets(
                                         jumps = sautsObjectif.toIntOrNull() ?: 2000,
                                         minutes = tempsObjectif.toIntOrNull() ?: 30,
@@ -298,8 +372,19 @@ fun ProfileScreen(
             onDismissRequest = { showDialog = false },
             title = { Text("Photo de profil") },
             text = { Text("Choisissez une source pour votre photo.") },
-            confirmButton = { TextButton(onClick = { showDialog = false; cameraLauncher.launch(null) }) { Text("Appareil Photo") } },
-            dismissButton = { TextButton(onClick = { showDialog = false; galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) { Text("Galerie") } }
+            confirmButton = {
+                TextButton(onClick = { showDialog = false; cameraLauncher.launch(null) }) {
+                    Text("Appareil Photo")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDialog = false
+                    galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) {
+                    Text("Galerie")
+                }
+            }
         )
     }
 }
@@ -315,21 +400,17 @@ fun ProfileInfoRow(label: String, value: String) {
     }
 }
 
-// Fonction pour calculer l'âge à partir du format JJMMAAAA
 fun calculateAge(dobStr: String): String {
     if (dobStr.length != 8) return "Non renseigné"
-    try {
+    return try {
         val format = SimpleDateFormat("ddMMyyyy", Locale.FRANCE)
         val dob = format.parse(dobStr) ?: return "Non renseigné"
         val dobCalendar = Calendar.getInstance().apply { time = dob }
         val today = Calendar.getInstance()
-
         var age = today.get(Calendar.YEAR) - dobCalendar.get(Calendar.YEAR)
-        if (today.get(Calendar.DAY_OF_YEAR) < dobCalendar.get(Calendar.DAY_OF_YEAR)) {
-            age--
-        }
-        return "$age ans"
+        if (today.get(Calendar.DAY_OF_YEAR) < dobCalendar.get(Calendar.DAY_OF_YEAR)) age--
+        "$age ans"
     } catch (e: Exception) {
-        return "Erreur date"
+        "Erreur date"
     }
 }

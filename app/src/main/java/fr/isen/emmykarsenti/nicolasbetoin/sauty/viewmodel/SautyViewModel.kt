@@ -112,10 +112,41 @@ class SautyViewModel : ViewModel() {
                 for (child in snapshot.children) {
                     child.getValue(WorkoutSession::class.java)?.let { tempList.add(it) }
                 }
-                _sessions.value = tempList.reversed()
+                val reversedList = tempList.reversed()
+                _sessions.value = reversedList
+
+                updateWeeklyTrends(reversedList)
             }
             override fun onCancelled(error: DatabaseError) {}
         })
+    }
+
+    private fun updateWeeklyTrends(sessions: List<WorkoutSession>) {
+        val dayLabels = listOf("lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim.")
+        // Initialisation à zéro pour tous les jours
+        val trendsMap = dayLabels.associateWith { DailyTrendData(it, 0f, 0f, 0f, 0f) }.toMutableMap()
+
+        for (session in sessions) {
+            val dateStr = session.date.lowercase(Locale.FRANCE)
+            // On cherche à quel jour correspond la session (ex: "lun. 12 mai" commence par "lun")
+            val matchedDay = dayLabels.find { dateStr.startsWith(it.replace(".", "")) }
+
+            if (matchedDay != null) {
+                val current = trendsMap[matchedDay]!!
+                val durationMin = session.durationSeconds / 60f
+                val totalMin = current.durationMin + durationMin
+                val totalJumps = current.jumps + session.jumpsTotal
+
+                trendsMap[matchedDay] = current.copy(
+                    durationMin = totalMin,
+                    jumps = totalJumps,
+                    kcal = current.kcal + session.calories,
+                    // Recalcul de la cadence moyenne
+                    cadence = if (totalMin > 0) totalJumps / totalMin else 0f
+                )
+            }
+        }
+        _weeklyTrends.value = dayLabels.map { trendsMap[it]!! }
     }
 
     // --- MISE À JOUR DEPUIS LE BLE ---

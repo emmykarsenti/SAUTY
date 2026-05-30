@@ -55,7 +55,8 @@ data class SessionData(
 fun SessionDetailScreen(
     currentSession: SessionData?, // La session en cours (récupérée de la base/STM32)
     pastSessions: List<SessionData>, // L'historique Firebase
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onHistoryClick: () -> Unit
 ) {
     // Récupération du contexte pour générer et partager le PDF
     val context = LocalContext.current
@@ -215,7 +216,7 @@ fun SessionDetailScreen(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
-                            .clickable { /* Action historique vers un autre écran */ }
+                            .clickable { onHistoryClick() }
                             .padding(8.dp)
                     )
                 }

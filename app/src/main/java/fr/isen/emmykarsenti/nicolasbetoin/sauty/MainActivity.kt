@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
@@ -42,10 +44,13 @@ import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.DashboardScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.LoginScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.ProfileScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.RegisterScreen
+import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionDetailScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.TrendsDetailScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.WorkoutScreen
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.viewmodel.SautyViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -80,13 +85,12 @@ class MainActivity : ComponentActivity() {
             // --- PONT DE DONNÉES ENTRE BLE ET VIEWMODEL ---
             LaunchedEffect(Unit) {
                 bleManager.onStatusMessage = { message ->
-                    android.util.Log.d("BLE_DEBUG", "onStatusMessage reçu : $message")
+                    Log.d("BLE_DEBUG", "onStatusMessage reçu : $message")
                     viewModel.updateStatus(message)
                 }
                 bleManager.tryAutoConnect()
             }
-            // ----------------------------------------------
-
+            
             MaterialTheme(colorScheme = darkColorScheme()) {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -231,6 +235,7 @@ class MainActivity : ComponentActivity() {
                             val isRunning by viewModel.isRunning.collectAsState()
                             val firebaseSessions by viewModel.sessions.collectAsState()
 
+                            // Si pas de session en cours, on prend la dernière de Firebase
                             val currentSession = if (isRunning || jumpsCount > 0) {
                                 fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
                                     id = "live",
@@ -240,15 +245,34 @@ class MainActivity : ComponentActivity() {
                                     totalJumps = jumpsCount,
                                     jumpsPerMin = 0,
                                     kcal = calories,
-                                    jumpsProgress = jumpsCount.toFloat() / viewModel.targetJumps,
+                                    jumpsProgress = jumpsCount.toFloat() / viewModel.targetJumps.coerceAtLeast(1),
                                     timeProgress = 0f,
-                                    kcalProgress = calories.toFloat() / viewModel.targetKcal
+                                    kcalProgress = calories.toFloat() / viewModel.targetKcal.coerceAtLeast(1)
                                 )
+                            } else if (firebaseSessions.isNotEmpty()) {
+                                val mostRecent = firebaseSessions.first()
+                                fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
+                                    id = mostRecent.date + mostRecent.timeRange,
+                                    date = mostRecent.date,
+                                    timeRange = mostRecent.timeRange,
+                                    durationStr = String.format(Locale.FRANCE, "%02d:%02d", mostRecent.durationSeconds / 60, mostRecent.durationSeconds % 60),
+                                    totalJumps = mostRecent.jumpsTotal,
+                                    jumpsPerMin = mostRecent.avgCadence,
+                                    kcal = mostRecent.calories,
+                                    jumpsProgress = mostRecent.jumpsTotal.toFloat() / viewModel.targetJumps.coerceAtLeast(1),
+                                    timeProgress = (mostRecent.durationSeconds / 60f) / viewModel.targetMinutes.coerceAtLeast(1).toFloat(),
+                                    kcalProgress = mostRecent.calories.toFloat() / viewModel.targetKcal.coerceAtLeast(1)
+                                )
+                            } else null
+
+                            // On retire la session qui est déjà affichée en haut (pour ne pas l'avoir en double)
+                            val listToMap = if (!isRunning && jumpsCount == 0 && firebaseSessions.isNotEmpty()) {
+                                firebaseSessions.drop(1)
                             } else {
-                                null
+                                firebaseSessions
                             }
 
-                            val pastSessions = firebaseSessions.map { workout ->
+                            val pastSessions = listToMap.map { workout ->
                                 fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
                                     id = workout.date + workout.timeRange,
                                     date = workout.date,
@@ -257,17 +281,52 @@ class MainActivity : ComponentActivity() {
                                     totalJumps = workout.jumpsTotal,
                                     jumpsPerMin = workout.avgCadence,
                                     kcal = workout.calories,
-                                    jumpsProgress = workout.jumpsTotal.toFloat() / viewModel.targetJumps,
-                                    timeProgress = (workout.durationSeconds / 60f) / viewModel.targetMinutes.toFloat(),
-                                    kcalProgress = workout.calories.toFloat() / viewModel.targetKcal
+                                    jumpsProgress = workout.jumpsTotal.toFloat() / viewModel.targetJumps.coerceAtLeast(1),
+                                    timeProgress = (workout.durationSeconds / 60f) / viewModel.targetMinutes.coerceAtLeast(1).toFloat(),
+                                    kcalProgress = workout.calories.toFloat() / viewModel.targetKcal.coerceAtLeast(1)
+                                )
+                            }
+                            SessionDetailScreen(
+                                currentSession = currentSession,
+                                pastSessions = pastSessions.take(5), // Limitation à 5 pour le carrousel
+                                onBackClick = { navController.popBackStack() },
+                                onHistoryClick = { navController.navigate("fullHistory") } // Navigation vers l'historique complet
+                            )
+                        }
+                        // Historique Complet
+                        composable("fullHistory") {
+                            val firebaseSessions by viewModel.sessions.collectAsState()
+
+                            // On mappe les données de Firebase au format d'affichage
+                            val allSessionsData = firebaseSessions.map { workout ->
+                                fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
+                                    id = workout.date + workout.timeRange,
+                                    date = workout.date,
+                                    timeRange = workout.timeRange,
+                                    durationStr = String.format(Locale.FRANCE, "%02d:%02d", workout.durationSeconds / 60, workout.durationSeconds % 60),
+                                    totalJumps = workout.jumpsTotal,
+                                    jumpsPerMin = workout.avgCadence,
+                                    kcal = workout.calories,
+                                    jumpsProgress = workout.jumpsTotal.toFloat() / viewModel.targetJumps.coerceAtLeast(1),
+                                    timeProgress = (workout.durationSeconds / 60f) / viewModel.targetMinutes.coerceAtLeast(1).toFloat(),
+                                    kcalProgress = workout.calories.toFloat() / viewModel.targetKcal.coerceAtLeast(1)
                                 )
                             }
 
-                            SessionDetailScreen(
-                                currentSession = currentSession,
-                                pastSessions = pastSessions,
-                                onBackClick = { navController.popBackStack() }
-                            )
+                            // Un petit écran très simple généré à la volée pour afficher toute la liste verticale
+                            Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(16.dp)) {
+                                    IconButton(onClick = { navController.popBackStack() }) {
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour", tint = Color.White)
+                                    }
+                                    Text("Historique Complet", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                }
+                                LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    items(allSessionsData) { session ->
+                                        fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.PastSessionCard(session = session)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -434,7 +493,7 @@ fun SautyScanScreen(
 }
 
 @Composable
-fun DeviceItemSecure(device: android.bluetooth.BluetoothDevice, onClick: () -> Unit) {
+fun DeviceItemSecure(device: BluetoothDevice, onClick: () -> Unit) {
     val safeName = remember(device) {
         try {
             device.name ?: "Appareil inconnu"

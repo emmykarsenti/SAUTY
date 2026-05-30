@@ -51,6 +51,8 @@ class SautyViewModel : ViewModel() {
     private var initialCalOffset = -1
 
     var userFirstName by mutableStateOf("")
+    var userPoids by mutableStateOf("70")
+    var userTaille by mutableStateOf("170")
     var targetJumps by mutableIntStateOf(2000)
     var targetMinutes by mutableIntStateOf(30)
     var targetKcal by mutableIntStateOf(300)
@@ -85,10 +87,10 @@ class SautyViewModel : ViewModel() {
         profileRef?.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 userFirstName = snapshot.child("prenom").getValue(String::class.java) ?: ""
+                userPoids = snapshot.child("poids").getValue(String::class.java) ?: "70"
+                userTaille = snapshot.child("taille").getValue(String::class.java) ?: "170"
 
-                // On descend dans le sous-dossier "objectifs" que tu as créé dans RegisterScreen
                 val objectifs = snapshot.child("objectifs")
-
                 updateTargets(
                     jumps = objectifs.child("sauts").getValue(Int::class.java) ?: 2000,
                     minutes = objectifs.child("minutes").getValue(Int::class.java) ?: 30,
@@ -97,6 +99,30 @@ class SautyViewModel : ViewModel() {
             }
             override fun onCancelled(error: DatabaseError) {}
         })
+    }
+
+    // Calcul des calories basé sur le poids et la taille réels de l'utilisateur
+    // Formule : MET (11.8 pour corde à sauter) × poids(kg) × heures
+    // Le MET est ensuite ajusté selon l'IMC pour tenir compte de la morphologie
+    private fun calculerCalories(): Int {
+        val poids = userPoids.toFloatOrNull() ?: 70f
+        val taille = userTaille.toFloatOrNull() ?: 170f
+        val tailleM = taille / 100f
+        val imc = poids / (tailleM * tailleM)
+
+        // Ajustement du MET selon l'IMC
+        // IMC normal (18.5-25) : MET 11.8
+        // IMC élevé (>25) : effort légèrement plus important → MET augmenté
+        // IMC faible (<18.5) : effort moindre → MET réduit
+        val met = when {
+            imc < 18.5f -> 10.5f
+            imc < 25f   -> 11.8f
+            imc < 30f   -> 12.5f
+            else        -> 13.2f
+        }
+
+        val heures = timeInSeconds / 3600f
+        return (met * poids * heures).toInt()
     }
 
     fun updateTargets(jumps: Int, minutes: Int, kcal: Int) {
@@ -114,7 +140,6 @@ class SautyViewModel : ViewModel() {
                 }
                 val reversedList = tempList.reversed()
                 _sessions.value = reversedList
-
                 updateWeeklyTrends(reversedList)
             }
             override fun onCancelled(error: DatabaseError) {}
@@ -123,12 +148,10 @@ class SautyViewModel : ViewModel() {
 
     private fun updateWeeklyTrends(sessions: List<WorkoutSession>) {
         val dayLabels = listOf("lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim.")
-        // Initialisation à zéro pour tous les jours
         val trendsMap = dayLabels.associateWith { DailyTrendData(it, 0f, 0f, 0f, 0f) }.toMutableMap()
 
         for (session in sessions) {
             val dateStr = session.date.lowercase(Locale.FRANCE)
-            // On cherche à quel jour correspond la session (ex: "lun. 12 mai" commence par "lun")
             val matchedDay = dayLabels.find { dateStr.startsWith(it.replace(".", "")) }
 
             if (matchedDay != null) {
@@ -141,7 +164,6 @@ class SautyViewModel : ViewModel() {
                     durationMin = totalMin,
                     jumps = totalJumps,
                     kcal = current.kcal + session.calories,
-                    // Recalcul de la cadence moyenne
                     cadence = if (totalMin > 0) totalJumps / totalMin else 0f
                 )
             }
@@ -149,15 +171,12 @@ class SautyViewModel : ViewModel() {
         _weeklyTrends.value = dayLabels.map { trendsMap[it]!! }
     }
 
-    // --- MISE À JOUR DEPUIS LE BLE ---
     fun updateFromBle(jumpsFromDevice: Int, caloriesFromDevice: Int) {
         if (_isRunning.value) {
-            // Si c'est le premier saut reçu depuis qu'on a fait "Play"
             if (initialJumpsOffset == -1) {
                 initialJumpsOffset = jumpsFromDevice
                 initialCalOffset = caloriesFromDevice
             }
-            // On affiche la différence (ex: STM32 est à 500, on commence à 500, donc 501-500 = 1 affiché)
             _jumpsCount.value = maxOf(0, jumpsFromDevice - initialJumpsOffset)
             _calories.value = maxOf(0, caloriesFromDevice - initialCalOffset)
         }
@@ -169,7 +188,7 @@ class SautyViewModel : ViewModel() {
         if (cleanMessage.contains("ACTION_JUMP", ignoreCase = true)) {
             if (_isRunning.value) {
                 _jumpsCount.value += 1
-                _calories.value = (_jumpsCount.value * 0.12).toInt()
+                _calories.value = calculerCalories()
             }
         } else {
             _connectionStatus.value = cleanMessage
@@ -189,6 +208,10 @@ class SautyViewModel : ViewModel() {
                 delay(1000L)
                 timeInSeconds++
                 updateTimerDisplay()
+                // Mise à jour des calories chaque seconde si session active
+                if (_jumpsCount.value > 0) {
+                    _calories.value = calculerCalories()
+                }
             }
         }
     }

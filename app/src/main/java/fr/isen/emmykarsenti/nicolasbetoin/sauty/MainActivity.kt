@@ -56,8 +56,8 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.entries.all { it.value }) {
-            Toast.makeText(this, "Permissions BLE accordées ! \uD83D\uDE80", Toast.LENGTH_SHORT).show()
-            bleManager.tryAutoConnect()
+            Toast.makeText(this, "Permissions BLE accordées ! 🚀", Toast.LENGTH_SHORT).show()
+            // tryAutoConnect supprimé ici — géré dans LaunchedEffect
         } else {
             Toast.makeText(this, "Erreur : Le Bluetooth est obligatoire.", Toast.LENGTH_LONG).show()
         }
@@ -74,12 +74,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val viewModel: SautyViewModel = viewModel()
+            val bleJumps by bleManager.jumpsState.collectAsState()
+            val bleCalories by bleManager.caloriesState.collectAsState()
 
             // --- PONT DE DONNÉES ENTRE BLE ET VIEWMODEL ---
             LaunchedEffect(Unit) {
                 bleManager.onStatusMessage = { message ->
+                    android.util.Log.d("BLE_DEBUG", "onStatusMessage reçu : $message")
                     viewModel.updateStatus(message)
                 }
+                bleManager.tryAutoConnect()
             }
             // ----------------------------------------------
 

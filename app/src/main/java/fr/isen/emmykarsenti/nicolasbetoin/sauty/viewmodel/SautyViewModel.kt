@@ -121,28 +121,26 @@ class SautyViewModel : ViewModel() {
     // --- MISE À JOUR DEPUIS LE BLE ---
     fun updateFromBle(jumpsFromDevice: Int, caloriesFromDevice: Int) {
         if (_isRunning.value) {
+            // Si c'est le premier saut reçu depuis qu'on a fait "Play"
             if (initialJumpsOffset == -1) {
                 initialJumpsOffset = jumpsFromDevice
                 initialCalOffset = caloriesFromDevice
             }
+            // On affiche la différence (ex: STM32 est à 500, on commence à 500, donc 501-500 = 1 affiché)
             _jumpsCount.value = maxOf(0, jumpsFromDevice - initialJumpsOffset)
             _calories.value = maxOf(0, caloriesFromDevice - initialCalOffset)
         }
     }
 
     fun updateStatus(message: String) {
-        // On nettoie les caractères invisibles (retours à la ligne de la STM32)
         val cleanMessage = message.trim()
-
-        // On vérifie si le message CONTIENT le mot clé (insensible à la casse)
+        android.util.Log.d("BLE_DEBUG", "updateStatus reçu : '$cleanMessage' — isRunning=${_isRunning.value}")
         if (cleanMessage.contains("ACTION_JUMP", ignoreCase = true)) {
-            // On vérifie que le chrono tourne
             if (_isRunning.value) {
                 _jumpsCount.value += 1
                 _calories.value = (_jumpsCount.value * 0.12).toInt()
             }
         } else {
-            // Sinon, c'est un message système (Connecté, etc.)
             _connectionStatus.value = cleanMessage
         }
     }

@@ -38,6 +38,8 @@ class BleManager(private val context: Context) {
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
 
+    private val charQueue = ArrayDeque<UUID>()
+
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val device = result.device
@@ -78,14 +80,25 @@ class BleManager(private val context: Context) {
 
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+            android.util.Log.d("BLE_DEBUG", "onConnectionStateChange — status=$status newState=$newState")
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 _isConnected.value = true
+                android.util.Log.d("BLE_DEBUG", "Connecté, lancement discoverServices")
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     onStatusMessage?.invoke("Connecté au SAUTY !")
                 }
-                gatt.discoverServices()
+                try {
+                    val refresh = gatt.javaClass.getMethod("refresh")
+                    refresh.invoke(gatt)
+                } catch (e: Exception) {
+                    Log.d("BLE_DEBUG", "refresh failed: ${e.message}")
+                }
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    gatt.discoverServices()
+                }, 300)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 _isConnected.value = false
+                android.util.Log.d("BLE_DEBUG", "Déconnecté")
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     onStatusMessage?.invoke("Bracelet déconnecté")
                 }
@@ -96,7 +109,13 @@ class BleManager(private val context: Context) {
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            if (status == BluetoothGatt.GATT_SUCCESS) enableNotifications(gatt)
+            android.util.Log.d("BLE_DEBUG", "onServicesDiscovered — status=$status")
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                enableNotifications(gatt)
+            } else {
+                android.util.Log.d("BLE_DEBUG", "Erreur discovery, reconnexion...")
+                gatt.disconnect()
+            }
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
@@ -107,9 +126,15 @@ class BleManager(private val context: Context) {
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             processData(characteristic.uuid, characteristic.value)
         }
+
+        override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            android.util.Log.d("BLE_DEBUG", "onDescriptorWrite — status=$status uuid=${descriptor.characteristic.uuid}")
+            enableNextNotification(gatt)
+        }
     }
 
     private fun processData(uuid: UUID, value: ByteArray?) {
+        android.util.Log.d("BLE_DEBUG", "processData — uuid=$uuid")
         if (value == null || value.isEmpty()) return
         if (uuid == JUMPS_CHAR_UUID) {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -117,26 +142,38 @@ class BleManager(private val context: Context) {
             }
         }
     }
-
-    private fun enableNotifications(gatt: BluetoothGatt) {
-        val service = gatt.getService(SERVICE_UUID) ?: return
-        val chars = listOf(JUMPS_CHAR_UUID, CALORIES_CHAR_UUID)
-
-        Thread {
-            chars.forEach { uuid ->
-                service.getCharacteristic(uuid)?.let { char ->
-                    gatt.setCharacteristicNotification(char, true)
-                    char.getDescriptor(CCCD_UUID)?.let { desc ->
-                        desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                        gatt.writeDescriptor(desc)
-                        Thread.sleep(300)
-                    }
-                }
-            }
+    private fun enableNextNotification(gatt: BluetoothGatt) {
+        val uuid = charQueue.removeFirstOrNull() ?: run {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 onStatusMessage?.invoke("Données synchronisées")
             }
-        }.start()
+            return
+        }
+        val service = gatt.getService(SERVICE_UUID) ?: return
+        val char = service.getCharacteristic(uuid) ?: run {
+            android.util.Log.d("BLE_DEBUG", "Caractéristique $uuid NON trouvée")
+            enableNextNotification(gatt)
+            return
+        }
+        gatt.setCharacteristicNotification(char, true)
+        val desc = char.getDescriptor(CCCD_UUID) ?: run {
+            android.util.Log.d("BLE_DEBUG", "CCCD NON trouvé pour $uuid")
+            enableNextNotification(gatt)
+            return
+        }
+        desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+        val result = gatt.writeDescriptor(desc)
+        android.util.Log.d("BLE_DEBUG", "writeDescriptor pour $uuid — résultat=$result")
+    }
+    private fun enableNotifications(gatt: BluetoothGatt) {
+        val service = gatt.getService(SERVICE_UUID) ?: run {
+            android.util.Log.d("BLE_DEBUG", "Service NON trouvé")
+            return
+        }
+        charQueue.clear()
+        charQueue.add(JUMPS_CHAR_UUID)
+        charQueue.add(CALORIES_CHAR_UUID)
+        enableNextNotification(gatt)
     }
 
     fun disconnectAndForget() {

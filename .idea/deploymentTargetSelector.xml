@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="SAUTY App">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-05-28T15:04:31.956302900Z">
+        <DropdownSelection timestamp="2026-05-30T13:44:33.793261900Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="PhysicalDevice" identifier="serial=H6NPCV0224452TG" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\emmyk\.android\avd\Pixel_9a_2.avd" />
             </handle>
           </Target>
         </DropdownSelection>

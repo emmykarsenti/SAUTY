@@ -32,12 +32,16 @@ fun DashboardScreen(
     val sessions by viewModel.sessions.collectAsState()
     val lastSession = sessions.firstOrNull()
 
-    // RÉCUPÉRATION DES DONNÉES DE LA DERNIÈRE SESSION
-    val currentJumps = lastSession?.jumpsTotal ?: 0
-    val currentMinutes = (lastSession?.durationSeconds ?: 0) / 60
-    val currentKcal = lastSession?.calories ?: 0
+    // CUMULS DE LA JOURNÉE
+    val todayJumps by viewModel.todayJumps.collectAsState()
+    val todayMinutes by viewModel.todayMinutes.collectAsState()
+    val todayCalories by viewModel.todayCalories.collectAsState()
 
-    // RÉCUPÉRATION DES OBJECTIFS (Correction synchronisation)
+    // DONNÉES DE LA DERNIÈRE SESSION (Pour la carte centrale uniquement)
+    val lastMinutes = (lastSession?.durationSeconds ?: 0) / 60
+    val lastCadence = lastSession?.avgCadence ?: 0
+
+    // OBJECTIFS
     val targetJumps = viewModel.targetJumps
     val targetMinutes = viewModel.targetMinutes
     val targetKcal = viewModel.targetKcal
@@ -59,13 +63,8 @@ fun DashboardScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                // Bonjour {Prénom}
                 Text(
-                    text = if (viewModel.userFirstName.isNotEmpty()) {
-                        "Bonjour ${viewModel.userFirstName}"
-                    } else {
-                        "Bonjour !"
-                    },
+                    text = if (viewModel.userFirstName.isNotEmpty()) "Bonjour ${viewModel.userFirstName}" else "Bonjour !",
                     style = MaterialTheme.typography.headlineLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
@@ -79,7 +78,7 @@ fun DashboardScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Bloc des Objectifs du Jour (Anneaux)
+        // Bloc des Objectifs du Jour (Utilise les totaux cumulative "today")
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
@@ -87,28 +86,28 @@ fun DashboardScreen(
         ) {
             Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 ActivityRings(
-                    jumpsProgress = currentJumps.toFloat() / targetJumps.coerceAtLeast(1),
-                    timeProgress = currentMinutes.toFloat() / targetMinutes.coerceAtLeast(1),
-                    kcalProgress = currentKcal.toFloat() / targetKcal.coerceAtLeast(1),
+                    jumpsProgress = todayJumps.toFloat() / targetJumps.coerceAtLeast(1),
+                    timeProgress = todayMinutes.toFloat() / targetMinutes.coerceAtLeast(1),
+                    kcalProgress = todayCalories.toFloat() / targetKcal.coerceAtLeast(1),
                     size = 120.dp
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text("Sauts", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    Text("$currentJumps / $targetJumps SAUTS", color = Color(0xFFFA9E1E), style = MaterialTheme.typography.titleMedium)
+                    Text("$todayJumps / $targetJumps SAUTS", color = Color(0xFFFA9E1E), style = MaterialTheme.typography.titleMedium)
 
                     Text("Temps d'entrainement", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    Text("$currentMinutes / $targetMinutes MIN", color = Color(0xFFFF521E), style = MaterialTheme.typography.titleMedium)
+                    Text("$todayMinutes / $targetMinutes MIN", color = Color(0xFFFF521E), style = MaterialTheme.typography.titleMedium)
 
                     Text("Kcal", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    Text("$currentKcal / $targetKcal KCAL", color = Color(0xFF00E5FF), style = MaterialTheme.typography.titleMedium)
+                    Text("$todayCalories / $targetKcal KCAL", color = Color(0xFF00E5FF), style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Bloc de la Dernière Session Enregistrée
+        // Bloc de la Dernière Session Enregistrée (Garde les infos de la dernière séance)
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
@@ -122,18 +121,18 @@ fun DashboardScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Temps d'entraînement", color = Color.Gray)
-                    Text("$currentMinutes MIN", color = Color(0xFFFF521E))
+                    Text("$lastMinutes MIN", color = Color(0xFFFF521E))
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Sauts", color = Color.Gray)
-                    Text("${lastSession?.avgCadence ?: 0} /MIN", color = Color(0xFF3902FF))
+                    Text("$lastCadence /MIN", color = Color(0xFF3902FF))
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Redirection vers les Histogrammes de Tendances
+        // Redirection vers les Histogrammes de Tendances (Affiche le cumul du jour)
         Card(
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
@@ -148,22 +147,22 @@ fun DashboardScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("Sauts", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                        Text("$currentJumps /JOUR", color = Color(0xFFFA9E1E))
+                        Text("$todayJumps /JOUR", color = Color(0xFFFA9E1E))
                     }
                     Column {
                         Text("Temps d'entrain.", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                        Text("$currentMinutes MIN/JOUR", color = Color(0xFFFF521E))
+                        Text("$todayMinutes MIN/JOUR", color = Color(0xFFFF521E))
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Column {
                         Text("KCAL", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                        Text("$currentKcal /JOUR", color = Color(0xFF00E5FF))
+                        Text("$todayCalories /JOUR", color = Color(0xFF00E5FF))
                     }
                     Column {
                         Text("Sauts / MIN", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                        Text("${lastSession?.avgCadence ?: 0} /MIN", color = Color(0xFF3902FF))
+                        Text("$lastCadence /MIN", color = Color(0xFF3902FF))
                     }
                 }
             }

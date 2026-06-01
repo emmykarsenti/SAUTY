@@ -24,7 +24,6 @@ class SautyViewModel : ViewModel() {
     private val database = FirebaseDatabase.getInstance("https://sauty-ekarsenti-nbetoin-default-rtdb.europe-west1.firebasedatabase.app/")
     private var historyRef: DatabaseReference? = null
     private var profileRef: DatabaseReference? = null
-    private var firebaseListener: ValueEventListener? = null
 
     private val _connectionStatus = MutableStateFlow("Déconnecté")
     val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
@@ -43,6 +42,16 @@ class SautyViewModel : ViewModel() {
 
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
+
+    // --- ÉTATS POUR LE CUMUL DU JOUR ---
+    private val _todayJumps = MutableStateFlow(0)
+    val todayJumps: StateFlow<Int> = _todayJumps.asStateFlow()
+
+    private val _todayMinutes = MutableStateFlow(0)
+    val todayMinutes: StateFlow<Int> = _todayMinutes.asStateFlow()
+
+    private val _todayCalories = MutableStateFlow(0)
+    val todayCalories: StateFlow<Int> = _todayCalories.asStateFlow()
 
     private var timerJob: Job? = null
     private var timeInSeconds = 0
@@ -101,19 +110,12 @@ class SautyViewModel : ViewModel() {
         })
     }
 
-    // Calcul des calories basé sur le poids et la taille réels de l'utilisateur
-    // Formule : MET (11.8 pour corde à sauter) × poids(kg) × heures
-    // Le MET est ensuite ajusté selon l'IMC pour tenir compte de la morphologie
     private fun calculerCalories(): Int {
         val poids = userPoids.toFloatOrNull() ?: 70f
         val taille = userTaille.toFloatOrNull() ?: 170f
         val tailleM = taille / 100f
         val imc = poids / (tailleM * tailleM)
 
-        // Ajustement du MET selon l'IMC
-        // IMC normal (18.5-25) : MET 11.8
-        // IMC élevé (>25) : effort légèrement plus important → MET augmenté
-        // IMC faible (<18.5) : effort moindre → MET réduit
         val met = when {
             imc < 18.5f -> 10.5f
             imc < 25f   -> 11.8f
@@ -140,10 +142,22 @@ class SautyViewModel : ViewModel() {
                 }
                 val reversedList = tempList.reversed()
                 _sessions.value = reversedList
+
+                // Calcul des totaux pour aujourd'hui
+                calculateTodayTotals(tempList)
                 updateWeeklyTrends(reversedList)
             }
             override fun onCancelled(error: DatabaseError) {}
         })
+    }
+
+    private fun calculateTodayTotals(allSessions: List<WorkoutSession>) {
+        val todayStr = SimpleDateFormat("EEE dd MMM", Locale.FRANCE).format(Date())
+        val todaySessions = allSessions.filter { it.date == todayStr }
+
+        _todayJumps.value = todaySessions.sumOf { it.jumpsTotal }
+        _todayMinutes.value = todaySessions.sumOf { it.durationSeconds } / 60
+        _todayCalories.value = todaySessions.sumOf { it.calories }
     }
 
     private fun updateWeeklyTrends(sessions: List<WorkoutSession>) {
@@ -184,7 +198,6 @@ class SautyViewModel : ViewModel() {
 
     fun updateStatus(message: String) {
         val cleanMessage = message.trim()
-        android.util.Log.d("BLE_DEBUG", "updateStatus reçu : '$cleanMessage' — isRunning=${_isRunning.value}")
         if (cleanMessage.contains("ACTION_JUMP", ignoreCase = true)) {
             if (_isRunning.value) {
                 _jumpsCount.value += 1
@@ -208,7 +221,6 @@ class SautyViewModel : ViewModel() {
                 delay(1000L)
                 timeInSeconds++
                 updateTimerDisplay()
-                // Mise à jour des calories chaque seconde si session active
                 if (_jumpsCount.value > 0) {
                     _calories.value = calculerCalories()
                 }

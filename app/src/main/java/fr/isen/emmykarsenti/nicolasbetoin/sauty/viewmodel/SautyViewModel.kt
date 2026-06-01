@@ -43,7 +43,6 @@ class SautyViewModel : ViewModel() {
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
-    // --- ÉTATS POUR LE CUMUL DU JOUR ---
     private val _todayJumps = MutableStateFlow(0)
     val todayJumps: StateFlow<Int> = _todayJumps.asStateFlow()
 
@@ -69,17 +68,8 @@ class SautyViewModel : ViewModel() {
     private val _sessions = MutableStateFlow<List<WorkoutSession>>(emptyList())
     val sessions: StateFlow<List<WorkoutSession>> = _sessions.asStateFlow()
 
-    private val _weeklyTrends = MutableStateFlow(
-        listOf(
-            DailyTrendData("lun.", 0f, 0f, 0f, 0f),
-            DailyTrendData("mar.", 0f, 0f, 0f, 0f),
-            DailyTrendData("mer.", 0f, 0f, 0f, 0f),
-            DailyTrendData("jeu.", 0f, 0f, 0f, 0f),
-            DailyTrendData("ven.", 0f, 0f, 0f, 0f),
-            DailyTrendData("sam.", 0f, 0f, 0f, 0f),
-            DailyTrendData("dim.", 0f, 0f, 0f, 0f)
-        )
-    )
+    // Contiendra maintenant une liste continue des 60 derniers jours
+    private val _weeklyTrends = MutableStateFlow<List<DailyTrendData>>(emptyList())
     val weeklyTrends: StateFlow<List<DailyTrendData>> = _weeklyTrends.asStateFlow()
 
     init {
@@ -90,6 +80,7 @@ class SautyViewModel : ViewModel() {
             listenToFirebaseHistory()
             listenToProfileTargets()
         }
+        refreshTrends()
     }
 
     private fun listenToProfileTargets() {
@@ -143,9 +134,8 @@ class SautyViewModel : ViewModel() {
                 val reversedList = tempList.reversed()
                 _sessions.value = reversedList
 
-                // Calcul des totaux pour aujourd'hui
                 calculateTodayTotals(tempList)
-                updateWeeklyTrends(reversedList)
+                refreshTrends()
             }
             override fun onCancelled(error: DatabaseError) {}
         })
@@ -160,29 +150,44 @@ class SautyViewModel : ViewModel() {
         _todayCalories.value = todaySessions.sumOf { it.calories }
     }
 
-    private fun updateWeeklyTrends(sessions: List<WorkoutSession>) {
-        val dayLabels = listOf("lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim.")
-        val trendsMap = dayLabels.associateWith { DailyTrendData(it, 0f, 0f, 0f, 0f) }.toMutableMap()
+    // GÉNÈRE UNE LISTE CONTINUE DES 60 DERNIERS JOURS
+    fun refreshTrends() {
+        val allSessions = _sessions.value
 
-        for (session in sessions) {
-            val dateStr = session.date.lowercase(Locale.FRANCE)
-            val matchedDay = dayLabels.find { dateStr.startsWith(it.replace(".", "")) }
+        val sdfDateMatching = SimpleDateFormat("EEE dd MMM", Locale.FRANCE)
+        val sdfAxisLabel = SimpleDateFormat("EE dd/MM", Locale.FRANCE)
 
-            if (matchedDay != null) {
-                val current = trendsMap[matchedDay]!!
-                val durationMin = session.durationSeconds / 60f
-                val totalMin = current.durationMin + durationMin
-                val totalJumps = current.jumps + session.jumpsTotal
+        val newTrends = mutableListOf<DailyTrendData>()
+        val cal = Calendar.getInstance(Locale.FRANCE)
 
-                trendsMap[matchedDay] = current.copy(
+        val daysToGenerate = 60
+        // On recule de 59 jours pour que la boucle se termine sur aujourd'hui
+        cal.add(Calendar.DAY_OF_YEAR, -(daysToGenerate - 1))
+
+        for (i in 0 until daysToGenerate) {
+            val targetDateStr = sdfDateMatching.format(cal.time)
+            val displayLabel = sdfAxisLabel.format(cal.time).replace(".", "")
+
+            val dailySessions = allSessions.filter { it.date.equals(targetDateStr, ignoreCase = true) }
+
+            val totalJumps = dailySessions.sumOf { it.jumpsTotal }
+            val totalMin = dailySessions.sumOf { it.durationSeconds } / 60f
+            val totalKcal = dailySessions.sumOf { it.calories }
+            val cadence = if (totalMin > 0) totalJumps / totalMin else 0f
+
+            newTrends.add(
+                DailyTrendData(
+                    dayLabel = displayLabel,
                     durationMin = totalMin,
-                    jumps = totalJumps,
-                    kcal = current.kcal + session.calories,
-                    cadence = if (totalMin > 0) totalJumps / totalMin else 0f
+                    jumps = totalJumps.toFloat(),
+                    kcal = totalKcal.toFloat(),
+                    cadence = cadence
                 )
-            }
+            )
+            cal.add(Calendar.DAY_OF_YEAR, 1) // Passe au jour suivant
         }
-        _weeklyTrends.value = dayLabels.map { trendsMap[it]!! }
+
+        _weeklyTrends.value = newTrends
     }
 
     fun updateFromBle(jumpsFromDevice: Int, caloriesFromDevice: Int) {

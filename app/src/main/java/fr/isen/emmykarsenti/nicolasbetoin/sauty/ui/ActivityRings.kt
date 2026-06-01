@@ -36,7 +36,7 @@ fun ActivityRings(
             radius = radiusOuter,
             style = Stroke(strokeWidth)
         )
-        // Correction ici : on force l'arc à épouser exactement le cercle
+        // On force l'arc à épouser exactement le cercle
         drawArc(
             color = orangeColor,
             startAngle = -90f,

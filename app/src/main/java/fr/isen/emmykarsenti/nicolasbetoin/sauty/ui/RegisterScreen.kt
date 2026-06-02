@@ -34,6 +34,10 @@ import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 
+/**
+ * Écran d'inscription gérant la création de compte Firebase Auth et l'initialisation
+ * du profil utilisateur dans la Realtime Database.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
@@ -43,7 +47,6 @@ fun RegisterScreen(
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    // ÉTATS DES CHAMPS
     var prenom by remember { mutableStateOf("") }
     var nom by remember { mutableStateOf("") }
     var identifiant by remember { mutableStateOf("") }
@@ -53,13 +56,11 @@ fun RegisterScreen(
     var taille by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    // ÉTATS UI
     var isUsernameTaken by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
 
-    // GESTION PHOTO
     var photoUri by remember { mutableStateOf<Uri?>(null) }
     var photoBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
@@ -88,7 +89,6 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // PHOTO DE PROFIL
         Box(
             modifier = Modifier
                 .size(120.dp)
@@ -109,7 +109,6 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // CHAMPS IDENTITÉ
         OutlinedTextField(value = prenom, onValueChange = { prenom = it }, label = { Text("Prénom") }, modifier = Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = nom, onValueChange = { nom = it }, label = { Text("Nom") }, modifier = Modifier.fillMaxWidth())
@@ -125,7 +124,6 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // CHAMPS PHYSIQUES
         Text("Infos physiques (pour le calcul des Kcal)", color = Color(0xFFFA9E1E), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -157,7 +155,6 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // CONNEXION
         Text("Sécurité", color = Color(0xFFFA9E1E), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Adresse Email") }, modifier = Modifier.fillMaxWidth())
@@ -178,7 +175,6 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(40.dp))
 
-        // BOUTON VALIDER
         Button(
             onClick = {
                 if (email.isNotEmpty() && password.isNotEmpty() && identifiant.isNotEmpty() && passwordError.isEmpty()) {
@@ -188,7 +184,6 @@ fun RegisterScreen(
                             if (task.isSuccessful) {
                                 val userId = task.result?.user?.uid ?: ""
 
-                                // Structure complète du profil incluant les objectifs par défaut
                                 val userProfile = mapOf(
                                     "prenom" to prenom,
                                     "nom" to nom,
@@ -205,7 +200,6 @@ fun RegisterScreen(
                                 )
 
                                 val database = FirebaseDatabase.getInstance("https://sauty-ekarsenti-nbetoin-default-rtdb.europe-west1.firebasedatabase.app/")
-                                // On enregistre sous users/UID/profil
                                 val myRef = database.getReference("users").child(userId).child("profil")
 
                                 myRef.setValue(userProfile).addOnCompleteListener { dbTask ->
@@ -244,7 +238,6 @@ fun RegisterScreen(
         Spacer(modifier = Modifier.height(24.dp))
     }
 
-    // DIALOGUE PHOTO
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
@@ -256,7 +249,10 @@ fun RegisterScreen(
     }
 }
 
-// Transformation pour le format JJ/MM/AAAA
+/**
+ * Intercepte la saisie de l'utilisateur pour formater automatiquement la chaîne
+ * de caractères en date standard (JJ/MM/AAAA) en ajoutant visuellement les slashes.
+ */
 class DateVisualTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val trimmed = if (text.text.length >= 8) text.text.substring(0..7) else text.text

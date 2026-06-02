@@ -19,6 +19,10 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * ViewModel principal de l'application Sauty.
+ * Gère la logique métier, la synchronisation Firebase, et le traitement des données Bluetooth.
+ */
 class SautyViewModel : ViewModel() {
 
     private val database = FirebaseDatabase.getInstance("https://sauty-ekarsenti-nbetoin-default-rtdb.europe-west1.firebasedatabase.app/")
@@ -54,9 +58,7 @@ class SautyViewModel : ViewModel() {
 
     private var timerJob: Job? = null
     private var timeInSeconds = 0
-
     private var initialJumpsOffset = -1
-    private var initialCalOffset = -1
 
     var userFirstName by mutableStateOf("")
     var userPoids by mutableStateOf("70")
@@ -68,7 +70,6 @@ class SautyViewModel : ViewModel() {
     private val _sessions = MutableStateFlow<List<WorkoutSession>>(emptyList())
     val sessions: StateFlow<List<WorkoutSession>> = _sessions.asStateFlow()
 
-    // Contiendra maintenant une liste continue des 60 derniers jours
     private val _weeklyTrends = MutableStateFlow<List<DailyTrendData>>(emptyList())
     val weeklyTrends: StateFlow<List<DailyTrendData>> = _weeklyTrends.asStateFlow()
 
@@ -83,6 +84,10 @@ class SautyViewModel : ViewModel() {
         refreshTrends()
     }
 
+    /**
+     * Récupère en temps réel les données de profil et les objectifs de l'utilisateur
+     * pour adapter les calculs de dépense énergétique.
+     */
     private fun listenToProfileTargets() {
         profileRef?.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -101,6 +106,10 @@ class SautyViewModel : ViewModel() {
         })
     }
 
+    /**
+     * Estime les calories brûlées en fonction du nombre de sauts, de l'IMC et du MET.
+     * Cette méthode garantit que l'effort est proportionnel au travail physique réel.
+     */
     private fun calculerCalories(): Int {
         val poids = userPoids.toFloatOrNull() ?: 70f
         val taille = userTaille.toFloatOrNull() ?: 170f
@@ -114,8 +123,10 @@ class SautyViewModel : ViewModel() {
             else        -> 13.2f
         }
 
-        val heures = timeInSeconds / 3600f
-        return (met * poids * heures).toInt()
+        val totalJumps = _jumpsCount.value.toFloat()
+        val caloriesBrutes = (met * poids * totalJumps) / 5000f
+
+        return caloriesBrutes.toInt()
     }
 
     fun updateTargets(jumps: Int, minutes: Int, kcal: Int) {
@@ -124,6 +135,10 @@ class SautyViewModel : ViewModel() {
         targetKcal = kcal
     }
 
+    /**
+     * Maintient la liste des sessions synchronisée avec Firebase et met à jour
+     * automatiquement les tableaux de bord et les statistiques.
+     */
     private fun listenToFirebaseHistory() {
         historyRef?.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -141,6 +156,9 @@ class SautyViewModel : ViewModel() {
         })
     }
 
+    /**
+     * Isole et somme les performances effectuées uniquement sur la journée en cours.
+     */
     private fun calculateTodayTotals(allSessions: List<WorkoutSession>) {
         val todayStr = SimpleDateFormat("EEE dd MMM", Locale.FRANCE).format(Date())
         val todaySessions = allSessions.filter { it.date == todayStr }
@@ -150,10 +168,12 @@ class SautyViewModel : ViewModel() {
         _todayCalories.value = todaySessions.sumOf { it.calories }
     }
 
-    // GÉNÈRE UNE LISTE CONTINUE DES 60 DERNIERS JOURS
+    /**
+     * Construit une frise chronologique des 60 derniers jours pour alimenter les graphiques.
+     * Associe chaque date à ses données ou remplit avec des zéros en cas d'inactivité.
+     */
     fun refreshTrends() {
         val allSessions = _sessions.value
-
         val sdfDateMatching = SimpleDateFormat("EEE dd MMM", Locale.FRANCE)
         val sdfAxisLabel = SimpleDateFormat("EE dd/MM", Locale.FRANCE)
 
@@ -161,7 +181,6 @@ class SautyViewModel : ViewModel() {
         val cal = Calendar.getInstance(Locale.FRANCE)
 
         val daysToGenerate = 60
-        // On recule de 59 jours pour que la boucle se termine sur aujourd'hui
         cal.add(Calendar.DAY_OF_YEAR, -(daysToGenerate - 1))
 
         for (i in 0 until daysToGenerate) {
@@ -184,23 +203,28 @@ class SautyViewModel : ViewModel() {
                     cadence = cadence
                 )
             )
-            cal.add(Calendar.DAY_OF_YEAR, 1) // Passe au jour suivant
+            cal.add(Calendar.DAY_OF_YEAR, 1)
         }
 
         _weeklyTrends.value = newTrends
     }
 
+    /**
+     * Point d'entrée des données brutes envoyées par le microcontrôleur.
+     */
     fun updateFromBle(jumpsFromDevice: Int, caloriesFromDevice: Int) {
         if (_isRunning.value) {
             if (initialJumpsOffset == -1) {
                 initialJumpsOffset = jumpsFromDevice
-                initialCalOffset = caloriesFromDevice
             }
             _jumpsCount.value = maxOf(0, jumpsFromDevice - initialJumpsOffset)
-            _calories.value = maxOf(0, caloriesFromDevice - initialCalOffset)
+            _calories.value = calculerCalories()
         }
     }
 
+    /**
+     * Interprète les messages d'état ou les événements spécifiques du module Bluetooth.
+     */
     fun updateStatus(message: String) {
         val cleanMessage = message.trim()
         if (cleanMessage.contains("ACTION_JUMP", ignoreCase = true)) {
@@ -220,15 +244,11 @@ class SautyViewModel : ViewModel() {
     private fun startWorkout() {
         _isRunning.value = true
         initialJumpsOffset = -1
-        initialCalOffset = -1
         timerJob = viewModelScope.launch {
             while (true) {
                 delay(1000L)
                 timeInSeconds++
                 updateTimerDisplay()
-                if (_jumpsCount.value > 0) {
-                    _calories.value = calculerCalories()
-                }
             }
         }
     }
@@ -238,6 +258,9 @@ class SautyViewModel : ViewModel() {
         timerJob?.cancel()
     }
 
+    /**
+     * Arrête l'exercice en cours, gère la sauvegarde si des données existent, puis remet à zéro.
+     */
     fun stopWorkout() {
         _isRunning.value = false
         timerJob?.cancel()
@@ -272,7 +295,6 @@ class SautyViewModel : ViewModel() {
         _doubleJumpsCount.value = 0
         _calories.value = 0
         initialJumpsOffset = -1
-        initialCalOffset = -1
         updateTimerDisplay()
     }
 

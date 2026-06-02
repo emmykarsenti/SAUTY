@@ -10,6 +10,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.UUID
 
+/**
+ * Gestionnaire Bluetooth Low Energy (BLE) pour l'application Sauty.
+ * Gère la recherche d'appareils, la connexion GATT, la reconnexion automatique,
+ * et la réception des notifications (sauts, calories) depuis le bracelet intelligent.
+ */
 @SuppressLint("MissingPermission")
 class BleManager(private val context: Context) {
 
@@ -21,20 +26,25 @@ class BleManager(private val context: Context) {
     private var bluetoothGatt: BluetoothGatt? = null
     var onStatusMessage: ((String) -> Unit)? = null
 
+    // UUIDs spécifiques au bracelet SAUTY
     private val SERVICE_UUID = UUID.fromString("00000000-cc7a-482a-984a-7f2ed5b3e58f")
     private val JUMPS_CHAR_UUID = UUID.fromString("00000000-8e22-4541-9d4c-21edae82ed19")
     private val CALORIES_CHAR_UUID = UUID.fromString("00000000-8e22-4541-9d4c-21edae82ed20")
     private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
+    // État réactif de la liste des appareils trouvés lors du scan
     private val _foundDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
     val foundDevices: StateFlow<List<BluetoothDevice>> = _foundDevices
 
+    // État réactif du nombre de sauts
     private val _jumpsState = MutableStateFlow(0)
     val jumpsState: StateFlow<Int> = _jumpsState
 
+    // État réactif des calories brûlées
     private val _caloriesState = MutableStateFlow(0)
     val caloriesState: StateFlow<Int> = _caloriesState
 
+    // État réactif de la connexion BLE
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected
 
@@ -51,6 +61,10 @@ class BleManager(private val context: Context) {
         }
     }
 
+    /**
+     * Lance le scan des périphériques Bluetooth Low Energy à proximité.
+     * Met à jour la liste [foundDevices] au fur et à mesure des découvertes.
+     */
     fun startScan() {
         if (bluetoothAdapter?.isEnabled == false) {
             onStatusMessage?.invoke("Activez le Bluetooth")
@@ -61,6 +75,11 @@ class BleManager(private val context: Context) {
         bleScanner?.startScan(scanCallback)
     }
 
+    /**
+     * Connecte l'application à un appareil BLE spécifique via GATT.
+     * @param device L'appareil Bluetooth cible.
+     * @param autoConnect Si true, sauvegarde l'adresse MAC pour de futures reconnexions.
+     */
     fun connectToDevice(device: BluetoothDevice, autoConnect: Boolean) {
         bleScanner?.stopScan(scanCallback)
         if (autoConnect) {
@@ -69,6 +88,9 @@ class BleManager(private val context: Context) {
         bluetoothGatt = device.connectGatt(context, false, gattCallback)
     }
 
+    /**
+     * Tente de se reconnecter automatiquement au dernier appareil sauvegardé en mémoire locale.
+     */
     fun tryAutoConnect() {
         val savedMac = sharedPreferences.getString("MAC_ADDRESS", null)
         if (savedMac != null && bluetoothAdapter?.isEnabled == true) {
@@ -133,6 +155,9 @@ class BleManager(private val context: Context) {
         }
     }
 
+    /**
+     * Traite les données brutes reçues depuis les caractéristiques du bracelet.
+     */
     private fun processData(uuid: UUID, value: ByteArray?) {
         android.util.Log.d("BLE_DEBUG", "processData — uuid=$uuid")
         if (value == null || value.isEmpty()) return
@@ -142,6 +167,11 @@ class BleManager(private val context: Context) {
             }
         }
     }
+
+    /**
+     * Active les notifications pour la prochaine caractéristique dans la file d'attente.
+     * Nécessaire car l'écriture de descripteurs BLE doit se faire séquentiellement.
+     */
     private fun enableNextNotification(gatt: BluetoothGatt) {
         val uuid = charQueue.removeFirstOrNull() ?: run {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -165,6 +195,10 @@ class BleManager(private val context: Context) {
         val result = gatt.writeDescriptor(desc)
         android.util.Log.d("BLE_DEBUG", "writeDescriptor pour $uuid — résultat=$result")
     }
+
+    /**
+     * Initialise la file d'attente pour activer les notifications (sauts et calories).
+     */
     private fun enableNotifications(gatt: BluetoothGatt) {
         val service = gatt.getService(SERVICE_UUID) ?: run {
             android.util.Log.d("BLE_DEBUG", "Service NON trouvé")
@@ -176,6 +210,10 @@ class BleManager(private val context: Context) {
         enableNextNotification(gatt)
     }
 
+    /**
+     * Déconnecte l'appareil actuel et supprime son adresse MAC des préférences
+     * pour empêcher la reconnexion automatique.
+     */
     fun disconnectAndForget() {
         sharedPreferences.edit().remove("MAC_ADDRESS").apply()
         bluetoothGatt?.disconnect()

@@ -29,16 +29,18 @@ import androidx.compose.ui.unit.sp
 import java.io.File
 import java.io.FileOutputStream
 
-// COULEURS
 val colorOrange = Color(0xFFFA9E1E)
 val colorRed = Color(0xFFFF521E)
 val colorCyan = Color(0xFF5AC8FA)
 val colorBlue = Color(0xFF3902FF)
 val textGray = Color(0xFF8E8E93)
 
-// MODÈLE DE DONNÉES (Prêt pour Firebase & STM32)
+/**
+ * Modèle de données unifié pour une session d'entraînement.
+ * Sert de pont entre les données brutes provenant du STM32 ou de Firebase et l'interface utilisateur.
+ */
 data class SessionData(
-    val id: String = "", // Pour identifier la session dans Firebase
+    val id: String = "",
     val date: String = "--",
     val timeRange: String = "--:--",
     val durationStr: String = "00:00",
@@ -50,15 +52,18 @@ data class SessionData(
     val kcalProgress: Float = 0f
 )
 
+/**
+ * Écran affichant les détails de la session en cours et un aperçu des sessions précédentes.
+ * Intègre également la fonctionnalité d'export PDF.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionDetailScreen(
-    currentSession: SessionData?, // La session en cours (récupérée de la base/STM32)
-    pastSessions: List<SessionData>, // L'historique Firebase
+    currentSession: SessionData?,
+    pastSessions: List<SessionData>,
     onBackClick: () -> Unit,
     onHistoryClick: () -> Unit
 ) {
-    // Récupération du contexte pour générer et partager le PDF
     val context = LocalContext.current
 
     Scaffold(
@@ -81,7 +86,6 @@ fun SessionDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        // Appel de la fonction de partage PDF ici
                         shareSessionAsPdf(context, currentSession)
                     }) {
                         Icon(Icons.Default.Share, contentDescription = "Partager", tint = Color.White)
@@ -100,9 +104,7 @@ fun SessionDetailScreen(
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
 
-            // Si currentSession est null (données pas encore chargées), on peut afficher un loader ou rien
             if (currentSession != null) {
-                // 1. En-tête Activité
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
@@ -129,7 +131,6 @@ fun SessionDetailScreen(
                     }
                 }
 
-                // 2. Détails de l'exercice
                 item {
                     Text(
                         text = "Détails de l'exercice",
@@ -147,7 +148,6 @@ fun SessionDetailScreen(
                             Column(modifier = Modifier.fillMaxWidth(0.65f)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                     StatItem(label = "Durée", value = currentSession.durationStr, unit = "", valueColor = colorRed)
-                                    // Utilisation de %,d pour formater les milliers (ex: 1250 -> 1 250)
                                     StatItem(label = "Sauts totaux", value = String.format("%,d", currentSession.totalJumps), unit = " SAUTS", valueColor = colorOrange)
                                 }
                                 Spacer(modifier = Modifier.height(24.dp))
@@ -157,7 +157,6 @@ fun SessionDetailScreen(
                                 }
                             }
 
-                            // Anneau dynamique connecté aux données
                             Box(modifier = Modifier.align(Alignment.TopEnd)) {
                                 ActivityRings(
                                     jumpsProgress = currentSession.jumpsProgress,
@@ -177,7 +176,6 @@ fun SessionDetailScreen(
                 }
             }
 
-            // 3. Sessions précédentes
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
@@ -206,7 +204,6 @@ fun SessionDetailScreen(
                 }
             }
 
-            // 4. Bouton Historique
             item {
                 Spacer(modifier = Modifier.height(24.dp))
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -225,8 +222,9 @@ fun SessionDetailScreen(
     }
 }
 
-// COMPOSANTS UI UTILITAIRES
-
+/**
+ * Composant réutilisable pour afficher une métrique spécifique avec son unité.
+ */
 @Composable
 fun StatItem(label: String, value: String, unit: String, valueColor: Color) {
     Column {
@@ -240,6 +238,9 @@ fun StatItem(label: String, value: String, unit: String, valueColor: Color) {
     }
 }
 
+/**
+ * Composant de carte pour présenter une session d'historique de manière compacte.
+ */
 @Composable
 fun PastSessionCard(session: SessionData) {
     Card(
@@ -263,7 +264,6 @@ fun PastSessionCard(session: SessionData) {
                 }
             }
 
-            // Anneaux de l'historique
             Box(modifier = Modifier.align(Alignment.CenterEnd)) {
                 ActivityRings(
                     jumpsProgress = session.jumpsProgress,
@@ -284,8 +284,10 @@ fun PastStatItem(label: String, value: String, valueColor: Color) {
     }
 }
 
-// FONCTION DE PARTAGE PDF
-
+/**
+ * Génère un fichier PDF natif contenant les statistiques de la session et déclenche
+ * l'interface de partage standard d'Android via un FileProvider sécurisé.
+ */
 fun shareSessionAsPdf(context: Context, session: SessionData?) {
     if (session == null) {
         Toast.makeText(context, "Aucune donnée à partager", Toast.LENGTH_SHORT).show()
@@ -293,19 +295,16 @@ fun shareSessionAsPdf(context: Context, session: SessionData?) {
     }
 
     try {
-        // 1. Création du document PDF (Format A4 standard)
         val pdfDocument = PdfDocument()
         val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
         val page = pdfDocument.startPage(pageInfo)
         val canvas = page.canvas
         val paint = Paint()
 
-        // 2. Dessiner le contenu (Titre)
         paint.textSize = 28f
         paint.isFakeBoldText = true
         canvas.drawText("Résumé de la Session - Bracelet Sauty", 50f, 80f, paint)
 
-        // 3. Dessiner les données
         paint.textSize = 20f
         paint.isFakeBoldText = false
         canvas.drawText("Date : ${session.date} (${session.timeRange})", 50f, 150f, paint)
@@ -316,12 +315,10 @@ fun shareSessionAsPdf(context: Context, session: SessionData?) {
         canvas.drawText("Sauts totaux : ${String.format("%,d", session.totalJumps)}", 50f, 320f, paint)
         canvas.drawText("Cadence moy. : ${session.jumpsPerMin} sauts/min", 50f, 370f, paint)
 
-        // Terminer la page
         pdfDocument.finishPage(page)
 
-        // 4. Créer le dossier et le fichier dans le cache
         val pdfFolder = File(context.cacheDir, "pdfs")
-        pdfFolder.mkdirs() // Créer le dossier s'il n'existe pas
+        pdfFolder.mkdirs()
         val file = File(pdfFolder, "Session_Sauty.pdf")
 
         val outputStream = FileOutputStream(file)
@@ -329,10 +326,8 @@ fun shareSessionAsPdf(context: Context, session: SessionData?) {
         pdfDocument.close()
         outputStream.close()
 
-        // 5. Générer l'URI sécurisée via le FileProvider
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
 
-        // 6. Lancer l'Intent de partage
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"
             putExtra(Intent.EXTRA_STREAM, uri)

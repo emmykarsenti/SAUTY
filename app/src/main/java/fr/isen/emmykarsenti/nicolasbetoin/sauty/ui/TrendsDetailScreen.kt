@@ -33,6 +33,10 @@ import fr.isen.emmykarsenti.nicolasbetoin.sauty.model.DailyTrendData
 import fr.isen.emmykarsenti.nicolasbetoin.sauty.viewmodel.SautyViewModel
 import java.util.Locale
 
+/**
+ * Vue détaillée présentant les performances sous forme de graphiques.
+ * Utilise la liste générée par le ViewModel pour afficher l'évolution sur plusieurs semaines.
+ */
 @Composable
 fun TrendsDetailScreen(
     viewModel: SautyViewModel = viewModel(),
@@ -102,6 +106,10 @@ fun TrendsDetailScreen(
     }
 }
 
+/**
+ * Composant graphique personnalisé responsable de la construction d'une courbe.
+ * Sépare l'axe des ordonnées (fixe) de la zone de tracé (défilante).
+ */
 @Composable
 fun TrendChartCard(
     title: String,
@@ -117,15 +125,11 @@ fun TrendChartCard(
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     val horizontalScrollState = rememberScrollState()
 
-    // Configuration de l'écran pour calculer la largeur exacte (Solution au bug d'écrasement)
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
 
-    // Largeur de l'écran moins les paddings (32dp) et l'axe Y (50dp)
     val availableWidthDp = configuration.screenWidthDp.dp - 32.dp - 50.dp
-    // On veut afficher exactement 7 colonnes (jours) dans cet espace
     val columnWidthDp = availableWidthDp / 7f
-    // La largeur totale de la zone défilante est proportionnelle aux 60 jours
     val canvasWidthDp = columnWidthDp * data.size
 
     LaunchedEffect(horizontalScrollState.maxValue) {
@@ -147,7 +151,6 @@ fun TrendChartCard(
 
             Row(modifier = Modifier.fillMaxWidth().height(220.dp)) {
 
-                // AXE Y (Fixe)
                 Canvas(modifier = Modifier.width(50.dp).fillMaxHeight()) {
                     val paddingTop = 60f
                     val paddingBottom = 60f
@@ -172,7 +175,6 @@ fun TrendChartCard(
                     }
                 }
 
-                // GRAPHIQUE (Défilant)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -180,7 +182,7 @@ fun TrendChartCard(
                 ) {
                     Canvas(
                         modifier = Modifier
-                            .width(canvasWidthDp) // C'est ICI que l'on empêche l'écrasement !
+                            .width(canvasWidthDp)
                             .fillMaxHeight()
                             .pointerInput(Unit) {
                                 detectTapGestures { offset ->
@@ -248,7 +250,6 @@ fun TrendChartCard(
                             drawCircle(color = Color.White, radius = 8f, center = point)
                         }
 
-                        // BULLE D'INFORMATION AU CLIC
                         selectedIndex?.let { index ->
                             if (index in points.indices) {
                                 val point = points[index]

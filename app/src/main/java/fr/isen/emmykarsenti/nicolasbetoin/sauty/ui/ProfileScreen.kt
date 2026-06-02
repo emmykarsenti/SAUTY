@@ -41,6 +41,11 @@ import fr.isen.emmykarsenti.nicolasbetoin.sauty.viewmodel.SautyViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * Écran de gestion du profil utilisateur.
+ * Permet de consulter et de modifier les informations personnelles,
+ * ainsi que les objectifs d'entraînement synchronisés avec la base de données Firebase.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
@@ -389,6 +394,10 @@ fun ProfileScreen(
     }
 }
 
+/**
+ * Composant utilitaire pour afficher une ligne d'information du profil
+ * avec un libellé et sa valeur correspondante de manière homogène.
+ */
 @Composable
 fun ProfileInfoRow(label: String, value: String) {
     Row(
@@ -400,6 +409,11 @@ fun ProfileInfoRow(label: String, value: String) {
     }
 }
 
+/**
+ * Calcule l'âge de l'utilisateur à partir d'une chaîne de date de naissance.
+ * * @param dobStr La date de naissance au format brut "ddMMyyyy".
+ * @return L'âge calculé sous forme de chaîne (ex: "25 ans") ou un message d'erreur si le format est invalide.
+ */
 fun calculateAge(dobStr: String): String {
     if (dobStr.length != 8) return "Non renseigné"
     return try {

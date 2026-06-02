@@ -1,5 +1,8 @@
 package fr.isen.emmykarsenti.nicolasbetoin.sauty.model
 
+/**
+ * Modèle de données représentant une session d'entraînement unique.
+ */
 data class WorkoutSession(
     val date: String = "",
     val timeRange: String = "",
@@ -11,6 +14,10 @@ data class WorkoutSession(
     val doubleJumpsMin: Int = 0
 )
 
+/**
+ * Modèle de données utilisé pour l'agrégation et l'affichage
+ * des statistiques journalières dans les graphiques de tendances.
+ */
 data class DailyTrendData(
     val dayLabel: String = "",
     val jumps: Float = 0f,

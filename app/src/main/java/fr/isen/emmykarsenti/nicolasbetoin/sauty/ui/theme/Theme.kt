@@ -33,6 +33,10 @@ private val LightColorScheme = lightColorScheme(
     */
 )
 
+/**
+ * Thème principal de l'application SAUTY basé sur Material Design 3.
+ * Gère le basculement automatique entre les modes clair et sombre.
+ */
 @Composable
 fun SAUTYTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

@@ -53,16 +53,19 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+// Point d'entrée principal de l'application
+// Gère le cycle de vie de base, l'initialisation du Bluetooth et la structure de navigation entre les écrans
 class MainActivity : ComponentActivity() {
 
     private lateinit var bleManager: BleManager
 
+    // Gestionnaire des retours de demandes de permissions
+    // S'assure que l'utilisateur a bien accordé l'accès au Bluetooth avant de continuer
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.entries.all { it.value }) {
             Toast.makeText(this, "Permissions BLE accordées ! 🚀", Toast.LENGTH_SHORT).show()
-            // tryAutoConnect supprimé ici — géré dans LaunchedEffect
         } else {
             Toast.makeText(this, "Erreur : Le Bluetooth est obligatoire.", Toast.LENGTH_LONG).show()
         }
@@ -74,6 +77,8 @@ class MainActivity : ComponentActivity() {
         bleManager = BleManager(this)
         checkAndRequestBluetoothPermissions()
 
+        // Vérifie si une session Firebase est déjà active pour rediriger l'utilisateur
+        // directement vers le tableau de bord au lieu de l'écran de connexion
         val user = FirebaseAuth.getInstance().currentUser
         val initialStartDestination = if (user != null) "dashboard" else "login"
 
@@ -82,7 +87,8 @@ class MainActivity : ComponentActivity() {
             val bleJumps by bleManager.jumpsState.collectAsState()
             val bleCalories by bleManager.caloriesState.collectAsState()
 
-            // --- PONT DE DONNÉES ENTRE BLE ET VIEWMODEL ---
+            // Pont de communication entre le gestionnaire Bluetooth (hardware) et le ViewModel (logique métier)
+            // Ce bloc écoute les changements d'état du module BLE et transmet les messages au ViewModel
             LaunchedEffect(Unit) {
                 bleManager.onStatusMessage = { message ->
                     Log.d("BLE_DEBUG", "onStatusMessage reçu : $message")
@@ -90,12 +96,13 @@ class MainActivity : ComponentActivity() {
                 }
                 bleManager.tryAutoConnect()
             }
-            
+
             MaterialTheme(colorScheme = darkColorScheme()) {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
+                // La barre de navigation du bas ne doit être visible que sur certains écrans principaux
                 val showBottomBar = currentRoute in listOf("dashboard", "workout", "scan")
 
                 Scaffold(
@@ -142,6 +149,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { innerPadding ->
+                    // Définition du graphe de navigation de l'application
+                    // Associe chaque route texte à son composant graphique correspondant
                     NavHost(
                         navController = navController,
                         startDestination = initialStartDestination,
@@ -228,6 +237,8 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
+                        // Écran affichant les détails d'une séance spécifique
+                        // Traite les données brutes pour les adapter à l'affichage
                         composable("sessionDetail") {
                             val timerString by viewModel.timerString.collectAsState()
                             val jumpsCount by viewModel.jumpsCount.collectAsState()
@@ -235,7 +246,8 @@ class MainActivity : ComponentActivity() {
                             val isRunning by viewModel.isRunning.collectAsState()
                             val firebaseSessions by viewModel.sessions.collectAsState()
 
-                            // Si pas de session en cours, on prend la dernière de Firebase
+                            // Détermine la session principale à afficher en haut de l'écran
+                            // Priorité : la session en cours d'enregistrement, sinon la dernière session enregistrée en base
                             val currentSession = if (isRunning || jumpsCount > 0) {
                                 fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
                                     id = "live",
@@ -265,7 +277,8 @@ class MainActivity : ComponentActivity() {
                                 )
                             } else null
 
-                            // On retire la session qui est déjà affichée en haut (pour ne pas l'avoir en double)
+                            // Prépare la liste de l'historique sous forme de carrousel
+                            // On ignore le premier élément s'il est déjà affiché en tant que session principale
                             val listToMap = if (!isRunning && jumpsCount == 0 && firebaseSessions.isNotEmpty()) {
                                 firebaseSessions.drop(1)
                             } else {
@@ -288,16 +301,16 @@ class MainActivity : ComponentActivity() {
                             }
                             SessionDetailScreen(
                                 currentSession = currentSession,
-                                pastSessions = pastSessions.take(5), // Limitation à 5 pour le carrousel
+                                pastSessions = pastSessions.take(5),
                                 onBackClick = { navController.popBackStack() },
-                                onHistoryClick = { navController.navigate("fullHistory") } // Navigation vers l'historique complet
+                                onHistoryClick = { navController.navigate("fullHistory") }
                             )
                         }
-                        // Historique Complet
+
+                        // Écran listant l'intégralité des sessions passées de l'utilisateur
                         composable("fullHistory") {
                             val firebaseSessions by viewModel.sessions.collectAsState()
 
-                            // On mappe les données de Firebase au format d'affichage
                             val allSessionsData = firebaseSessions.map { workout ->
                                 fr.isen.emmykarsenti.nicolasbetoin.sauty.ui.SessionData(
                                     id = workout.date + workout.timeRange,
@@ -313,7 +326,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            // Un petit écran très simple généré à la volée pour afficher toute la liste verticale
                             Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(16.dp)) {
                                     IconButton(onClick = { navController.popBackStack() }) {
@@ -334,6 +346,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Gère la complexité des permissions Bluetooth introduite par les différentes versions d'Android
+    // Android 12+ nécessite des permissions spécifiques au Bluetooth, tandis que les versions antérieures lient cela à la localisation
     private fun checkAndRequestBluetoothPermissions() {
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
@@ -344,6 +358,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// Interface utilisateur dédiée au scan et à la gestion des appareils Bluetooth
 @SuppressLint("MissingPermission")
 @Composable
 fun SautyScanScreen(
@@ -419,6 +434,7 @@ fun SautyScanScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // Liste dynamique mettant à jour les appareils détectés en temps réel
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -435,6 +451,8 @@ fun SautyScanScreen(
         }
     }
 
+    // Boîte de dialogue de confirmation qui s'affiche lors de la sélection d'un appareil dans la liste
+    // Permet de valider la connexion et d'activer/désactiver la mémorisation pour les sessions futures
     if (showDialog && selectedDevice != null) {
         val safeName = try {
             selectedDevice?.name ?: "Appareil Inconnu"
@@ -492,6 +510,8 @@ fun SautyScanScreen(
     }
 }
 
+// Composant d'interface pour afficher un appareil dans la liste de résultats du scan
+// Intègre une gestion d'erreurs (SecurityException) pour éviter un crash si l'accès au nom de l'appareil est restreint
 @Composable
 fun DeviceItemSecure(device: BluetoothDevice, onClick: () -> Unit) {
     val safeName = remember(device) {

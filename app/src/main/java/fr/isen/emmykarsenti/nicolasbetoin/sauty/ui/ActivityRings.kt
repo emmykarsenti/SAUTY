@@ -12,6 +12,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+/**
+ * Composant graphique personnalisé dessinant trois anneaux concentriques.
+ * Représente visuellement la progression de l'utilisateur sur trois métriques :
+ * sauts (externe), temps (intermédiaire) et calories (interne).
+ */
 @Composable
 fun ActivityRings(
     jumpsProgress: Float,
@@ -29,7 +34,7 @@ fun ActivityRings(
         val redColor = Color(0xFFFF521E)
         val cyanColor = Color(0xFF5AC8FA)
 
-        // 1. Cercle des Sauts (Rose) - Externe
+        // 1. Cercle des Sauts (Orange) - Externe
         val radiusOuter = (size.toPx() / 2) - (strokeWidth / 2)
         drawCircle(
             color = orangeColor.copy(alpha = 0.15f),
@@ -47,7 +52,7 @@ fun ActivityRings(
             style = Stroke(strokeWidth, cap = StrokeCap.Round)
         )
 
-        // 2. Cercle du Temps Actif (Vert) - Intermédiaire
+        // 2. Cercle du Temps Actif (Rouge) - Intermédiaire
         val radiusMedium = radiusOuter - strokeWidth - spacing
         drawCircle(
             color = redColor.copy(alpha = 0.15f),

@@ -17,6 +17,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/**
+ * Interface d'entraînement actif.
+ * Affiche les statistiques en temps réel et permet de contrôler le déroulement de la session.
+ */
 @Composable
 fun WorkoutScreen(
     jumpsCount: Int,
@@ -35,26 +39,22 @@ fun WorkoutScreen(
         verticalArrangement = Arrangement.SpaceBetween
     ) {
 
-        // LES STATISTIQUES EN DIRECT
         Column(
             horizontalAlignment = Alignment.Start,
             modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 40.dp)
         ) {
-            // Sauts
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(text = "$jumpsCount", color = Color.White, fontSize = 80.sp, fontWeight = FontWeight.Light)
                 Text(text = " SAUTS", color = Color.Gray, fontSize = 16.sp, modifier = Modifier.padding(bottom = 16.dp, start = 8.dp))
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Calories
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(text = "$calories", color = Color.White, fontSize = 60.sp, fontWeight = FontWeight.Light)
                 Text(text = " KCAL", color = Color.Gray, fontSize = 16.sp, modifier = Modifier.padding(bottom = 12.dp, start = 8.dp))
             }
         }
 
-        // PANNEAU DE CONTRÔLE
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1C1E)),
             shape = RoundedCornerShape(32.dp),
@@ -64,7 +64,6 @@ fun WorkoutScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(24.dp)
             ) {
-                // CHRONOMÈTRE
                 Text(
                     text = timerString,
                     color = Color(0xFFE5D52A),
@@ -74,7 +73,6 @@ fun WorkoutScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // BOUTONS
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly

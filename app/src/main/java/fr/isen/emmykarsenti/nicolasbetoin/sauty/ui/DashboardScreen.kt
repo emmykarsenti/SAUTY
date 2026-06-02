@@ -21,6 +21,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * Écran d'accueil principal (Tableau de bord).
+ * Affiche le résumé des activités de la journée, les progrès par rapport aux objectifs (anneaux),
+ * ainsi que des raccourcis vers la dernière session et les tendances globales.
+ */
 @Composable
 fun DashboardScreen(
     bleManager: BleManager,

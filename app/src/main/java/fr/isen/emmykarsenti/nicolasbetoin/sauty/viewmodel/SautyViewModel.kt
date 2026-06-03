@@ -107,7 +107,7 @@ class SautyViewModel : ViewModel() {
     }
 
     /**
-     * Estime les calories brûlées en fonction du nombre de sauts, de l'IMC et du MET.
+     * Estime les calories brûlées en fonction du temps écoulé, de l'IMC et du MET.
      * Cette méthode garantit que l'effort est proportionnel au travail physique réel.
      */
     private fun calculerCalories(): Int {
@@ -123,10 +123,8 @@ class SautyViewModel : ViewModel() {
             else        -> 13.2f
         }
 
-        val totalJumps = _jumpsCount.value.toFloat()
-        val caloriesBrutes = (met * poids * totalJumps) / 5000f
-
-        return caloriesBrutes.toInt()
+        val heures = timeInSeconds / 3600f
+        return (met * poids * heures).toInt()
     }
 
     fun updateTargets(jumps: Int, minutes: Int, kcal: Int) {
@@ -170,7 +168,6 @@ class SautyViewModel : ViewModel() {
 
     /**
      * Construit une frise chronologique des 60 derniers jours pour alimenter les graphiques.
-     * Associe chaque date à ses données ou remplit avec des zéros en cas d'inactivité.
      */
     fun refreshTrends() {
         val allSessions = _sessions.value
@@ -211,13 +208,13 @@ class SautyViewModel : ViewModel() {
 
     /**
      * Point d'entrée des données brutes envoyées par le microcontrôleur.
+     * Ne met plus à jour _jumpsCount ici — géré par updateStatus via ACTION_JUMP.
      */
     fun updateFromBle(jumpsFromDevice: Int, caloriesFromDevice: Int) {
         if (_isRunning.value) {
             if (initialJumpsOffset == -1) {
                 initialJumpsOffset = jumpsFromDevice
             }
-            _jumpsCount.value = maxOf(0, jumpsFromDevice - initialJumpsOffset)
             _calories.value = calculerCalories()
         }
     }
@@ -249,6 +246,9 @@ class SautyViewModel : ViewModel() {
                 delay(1000L)
                 timeInSeconds++
                 updateTimerDisplay()
+                if (_jumpsCount.value > 0) {
+                    _calories.value = calculerCalories()
+                }
             }
         }
     }
